@@ -1,0 +1,49 @@
+name: Release function
+
+on:
+  push:
+    tags:
+      - "function-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: function
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: function/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - name: Install production deps for packaging
+        run: |
+          rm -rf node_modules
+          npm ci --omit=dev
+
+      - name: Create zip
+        run: |
+          zip -r function.zip host.json package.json dist node_modules \
+            -x 'node_modules/.cache/*' -x 'node_modules/.bin/*'
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
+          gh release upload "${GITHUB_REF_NAME}" function.zip --clobber

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "location": {
+          "label": "Region",
+          "toolTip": "Azure region for the Event Hub and Function App. Resource logs can only be forwarded from resources in this same region. Metrics and activity logs are collected across all regions regardless.",
+          "visible": true
+        }
+      }
+    },
+    "basics": [],
+    "steps": [],
+    "outputs": {
+      "location": "[location()]"
+    }
+  }
+}

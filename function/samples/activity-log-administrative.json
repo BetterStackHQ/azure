@@ -1,0 +1,26 @@
+{
+  "records": [
+    {
+      "time": "2026-04-24T09:22:09.8045981Z",
+      "operationName": "MICROSOFT.CONTAINERINSTANCE/CONTAINERGROUPS/WRITE",
+      "category": "Administrative",
+      "resultType": "Success",
+      "resultSignature": "Succeeded.Created",
+      "correlationId": "95369555-fab6-4b47-94b7-32888beece3a",
+      "level": "Information",
+      "resourceId": "/SUBSCRIPTIONS/645383E7-89F3-4494-B695-EDFE4B926223/RESOURCEGROUPS/RG-BETTERSTACK/PROVIDERS/MICROSOFT.CONTAINERINSTANCE/CONTAINERGROUPS/BETTERSTACK-VECTOR-S4267-WESTEUROPE",
+      "callerIpAddress": "2a0e:1d47:d403:6000:d413:76d8:5e20:589e",
+      "identity": {
+        "claims": {
+          "name": "alistair@evanson.ltd",
+          "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn": "alistair@evanson.ltd"
+        }
+      },
+      "properties": {
+        "entity": "/subscriptions/645383e7-89f3-4494-b695-edfe4b926223/resourcegroups/rg-betterstack/providers/Microsoft.ContainerInstance/containerGroups/betterstack-vector-s4267-westeurope",
+        "eventCategory": "Administrative",
+        "message": "Microsoft.ContainerInstance/containerGroups/write"
+      }
+    }
+  ]
+}
