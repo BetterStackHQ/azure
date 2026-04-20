@@ -274,7 +274,7 @@
         "[variables('nestedDeploymentName')]"
       ],
       "properties": {
-        "eventHubAuthorizationRuleId": "[reference('betterstack-resources').outputs.sendRuleId.value]",
+        "eventHubAuthorizationRuleId": "[reference(variables('nestedDeploymentName')).outputs.sendRuleId.value]",
         "eventHubName": "[variables('eventHubName')]",
         "logs": [
           {
@@ -320,7 +320,7 @@
     },
     "eventHubNamespaceName": {
       "type": "string",
-      "value": "[reference('betterstack-resources').outputs.namespaceName.value]"
+      "value": "[reference(variables('nestedDeploymentName')).outputs.namespaceName.value]"
     },
     "eventHubName": {
       "type": "string",
