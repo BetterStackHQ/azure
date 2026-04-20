@@ -1,0 +1,346 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "servicePrincipalObjectId": {
+      "type": "string",
+      "metadata": {
+        "description": "Object ID of the Better Stack service principal in your tenant (provided by Better Stack after consent)."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure region for all resources (e.g. eastus, westeurope)."
+      }
+    },
+    "betterStackSourceToken": {
+      "type": "secureString",
+      "metadata": {
+        "description": "Better Stack source token for log ingestion."
+      }
+    },
+    "betterStackIngestingHost": {
+      "type": "string",
+      "defaultValue": "in.logs.betterstack.com",
+      "metadata": {
+        "description": "Better Stack log ingestion endpoint."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-betterstack",
+      "metadata": {
+        "description": "Name of the resource group to create for Better Stack resources."
+      }
+    },
+    "betterStackSourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Better Stack source ID (e.g. s12345). Used to identify resources belonging to this source."
+      }
+    },
+    "eventHubName": {
+      "type": "string",
+      "defaultValue": "logs",
+      "metadata": {
+        "description": "Name of the Event Hub within the namespace."
+      }
+    },
+    "returnUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "URL to return to after deployment completes (shown in deployment outputs)."
+      }
+    }
+  },
+  "variables": {
+    "nestedDeploymentName": "[concat('betterstack-resources-', parameters('betterStackSourceId'), '-', parameters('location'))]",
+    "monitoringReaderRoleId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
+    "monitoringContributorRoleId": "749f88d5-cbae-40b8-bcfc-e573ddc772fa",
+    "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2022-09-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().subscriptionId, parameters('servicePrincipalObjectId'), variables('monitoringReaderRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringReaderRoleId'))]",
+        "principalId": "[parameters('servicePrincipalObjectId')]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().subscriptionId, parameters('servicePrincipalObjectId'), variables('monitoringContributorRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringContributorRoleId'))]",
+        "principalId": "[parameters('servicePrincipalObjectId')]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().subscriptionId, parameters('servicePrincipalObjectId'), variables('readerRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('readerRoleId'))]",
+        "principalId": "[parameters('servicePrincipalObjectId')]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('nestedDeploymentName')]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "Inner"
+        },
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "eventHubName": {
+            "value": "[parameters('eventHubName')]"
+          },
+          "betterStackSourceToken": {
+            "value": "[parameters('betterStackSourceToken')]"
+          },
+          "betterStackIngestingHost": {
+            "value": "[parameters('betterStackIngestingHost')]"
+          },
+          "betterStackSourceId": {
+            "value": "[parameters('betterStackSourceId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "eventHubName": {
+              "type": "string"
+            },
+            "betterStackSourceToken": {
+              "type": "secureString"
+            },
+            "betterStackIngestingHost": {
+              "type": "string"
+            },
+            "betterStackSourceId": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "namespaceName": "[concat('bs-', parameters('betterStackSourceId'), '-', parameters('location'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.EventHub/namespaces",
+              "apiVersion": "2024-01-01",
+              "name": "[variables('namespaceName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard",
+                "tier": "Standard",
+                "capacity": 1
+              }
+            },
+            {
+              "type": "Microsoft.EventHub/namespaces/eventhubs",
+              "apiVersion": "2024-01-01",
+              "name": "[concat(variables('namespaceName'), '/', parameters('eventHubName'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', variables('namespaceName'))]"
+              ],
+              "properties": {
+                "messageRetentionInDays": 1,
+                "partitionCount": 4
+              }
+            },
+            {
+              "type": "Microsoft.EventHub/namespaces/eventhubs/consumergroups",
+              "apiVersion": "2024-01-01",
+              "name": "[concat(variables('namespaceName'), '/', parameters('eventHubName'), '/vector-consumer-group')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces/eventhubs', variables('namespaceName'), parameters('eventHubName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.EventHub/namespaces/authorizationRules",
+              "apiVersion": "2024-01-01",
+              "name": "[concat(variables('namespaceName'), '/DiagnosticSettingsSend')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', variables('namespaceName'))]"
+              ],
+              "properties": {
+                "rights": [
+                  "Send"
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.EventHub/namespaces/authorizationRules",
+              "apiVersion": "2024-01-01",
+              "name": "[concat(variables('namespaceName'), '/VectorListen')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', variables('namespaceName'))]"
+              ],
+              "properties": {
+                "rights": [
+                  "Listen"
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.ContainerInstance/containerGroups",
+              "apiVersion": "2023-05-01",
+              "name": "[concat('bs-vector-', parameters('betterStackSourceId'), '-', parameters('location'))]",
+              "location": "[parameters('location')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'VectorListen')]",
+                "[resourceId('Microsoft.EventHub/namespaces/eventhubs/consumergroups', variables('namespaceName'), parameters('eventHubName'), 'vector-consumer-group')]"
+              ],
+              "properties": {
+                "containers": [
+                  {
+                    "name": "vector",
+                    "properties": {
+                      "image": "ghcr.io/vectordotdev/vector:latest-debian",
+                      "resources": {
+                        "requests": {
+                          "cpu": 1,
+                          "memoryInGB": 1
+                        }
+                      },
+                      "command": [
+                        "/bin/sh",
+                        "-c",
+                        "cat > /etc/vector/vector.toml << 'VECTORCFG'\n[sources.azure_event_hub]\ntype = \"kafka\"\nbootstrap_servers = \"${EVENTHUB_NAMESPACE_FQDN}:9093\"\ngroup_id = \"vector-consumer-group\"\ntopics = [\"${EVENTHUB_NAME}\"]\nsasl.enabled = true\nsasl.mechanism = \"PLAIN\"\nsasl.username = \"$ConnectionString\"\nsasl.password = \"${EVENTHUB_CONNECTION_STRING}\"\ntls.enabled = true\ndecoding.codec = \"json\"\n\n[transforms.rename_timestamp]\ntype = \"remap\"\ninputs = [\"azure_event_hub\"]\nsource = \".dt = del(.timestamp)\"\n\n[sinks.betterstack]\ntype = \"http\"\ninputs = [\"rename_timestamp\"]\nuri = \"https://${BETTERSTACK_INGESTING_HOST}\"\nmethod = \"post\"\nencoding.codec = \"json\"\ncompression = \"gzip\"\nauth.strategy = \"bearer\"\nauth.token = \"${BETTERSTACK_SOURCE_TOKEN}\"\nbatch.max_bytes = 1048576\nbatch.timeout_secs = 1\nrequest.retry_attempts = 3\nrequest.timeout_secs = 30\nVECTORCFG\nexec vector --config /etc/vector/vector.toml"
+                      ],
+                      "environmentVariables": [
+                        {
+                          "name": "EVENTHUB_CONNECTION_STRING",
+                          "secureValue": "[listKeys(resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'VectorListen'), '2024-01-01').primaryConnectionString]"
+                        },
+                        {
+                          "name": "BETTERSTACK_SOURCE_TOKEN",
+                          "secureValue": "[parameters('betterStackSourceToken')]"
+                        },
+                        {
+                          "name": "EVENTHUB_NAMESPACE_FQDN",
+                          "value": "[concat(variables('namespaceName'), '.servicebus.windows.net')]"
+                        },
+                        {
+                          "name": "EVENTHUB_NAME",
+                          "value": "[parameters('eventHubName')]"
+                        },
+                        {
+                          "name": "BETTERSTACK_INGESTING_HOST",
+                          "value": "[parameters('betterStackIngestingHost')]"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "osType": "Linux",
+                "restartPolicy": "Always"
+              }
+            }
+          ],
+          "outputs": {
+            "namespaceName": {
+              "type": "string",
+              "value": "[variables('namespaceName')]"
+            },
+            "sendRuleId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'DiagnosticSettingsSend')]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat('betterstack-activity-logs-', parameters('betterStackSourceId'), '-', parameters('location'))]",
+      "dependsOn": [
+        "[variables('nestedDeploymentName')]"
+      ],
+      "properties": {
+        "eventHubAuthorizationRuleId": "[reference('betterstack-resources').outputs.sendRuleId.value]",
+        "eventHubName": "[parameters('eventHubName')]",
+        "logs": [
+          {
+            "category": "Administrative",
+            "enabled": true
+          },
+          {
+            "category": "Security",
+            "enabled": true
+          },
+          {
+            "category": "ServiceHealth",
+            "enabled": true
+          },
+          {
+            "category": "Alert",
+            "enabled": true
+          },
+          {
+            "category": "Recommendation",
+            "enabled": true
+          },
+          {
+            "category": "Policy",
+            "enabled": true
+          },
+          {
+            "category": "Autoscale",
+            "enabled": true
+          },
+          {
+            "category": "ResourceHealth",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[parameters('resourceGroupName')]"
+    },
+    "eventHubNamespaceName": {
+      "type": "string",
+      "value": "[reference('betterstack-resources').outputs.namespaceName.value]"
+    },
+    "eventHubName": {
+      "type": "string",
+      "value": "[parameters('eventHubName')]"
+    },
+    "nextStepsUrl": {
+      "type": "string",
+      "value": "[if(empty(parameters('returnUrl')), 'https://betterstack.com/integrations/azure', parameters('returnUrl'))]"
+    }
+  }
+}
