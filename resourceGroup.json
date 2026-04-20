@@ -23,7 +23,6 @@
     },
     "betterStackIngestingHost": {
       "type": "string",
-      "defaultValue": "in.logs.betterstack.com",
       "metadata": {
         "description": "Better Stack log ingestion endpoint."
       }
