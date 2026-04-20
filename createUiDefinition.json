@@ -13,47 +13,7 @@
         }
       }
     },
-    "basics": [
-      {
-        "name": "servicePrincipalObjectId",
-        "type": "Microsoft.Common.TextBox",
-        "label": "Service Principal Object ID",
-        "toolTip": "The object ID of the Better Stack service principal in your tenant. This is provided by Better Stack after you grant admin consent.",
-        "placeholder": "00000000-0000-0000-0000-000000000000",
-        "constraints": {
-          "required": true,
-          "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-          "validationMessage": "Must be a valid GUID (e.g. 00000000-0000-0000-0000-000000000000)."
-        }
-      },
-      {
-        "name": "betterStackSourceId",
-        "type": "Microsoft.Common.TextBox",
-        "label": "Better Stack Source ID",
-        "toolTip": "Your Better Stack source ID (e.g. s12345). Found in your Better Stack dashboard.",
-        "placeholder": "s12345",
-        "constraints": {
-          "required": true,
-          "regex": "^s[0-9]+$",
-          "validationMessage": "Must be a valid source ID (e.g. s12345)."
-        }
-      },
-      {
-        "name": "betterStackSourceToken",
-        "type": "Microsoft.Common.PasswordBox",
-        "label": {
-          "password": "Better Stack Source Token",
-          "confirmPassword": "Confirm Source Token"
-        },
-        "toolTip": "Your Better Stack source token for log ingestion. Found in your Better Stack dashboard.",
-        "constraints": {
-          "required": true
-        },
-        "options": {
-          "hideConfirmation": true
-        }
-      }
-    ],
+    "basics": [],
     "steps": [
       {
         "name": "deployment",
@@ -70,60 +30,13 @@
               "regex": "^[-\\w._()]{1,90}$",
               "validationMessage": "Resource group name must be 1-90 characters and can contain alphanumerics, underscores, parentheses, hyphens, and periods."
             }
-          },
-          {
-            "name": "eventHubName",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Event Hub Name",
-            "defaultValue": "logs",
-            "toolTip": "Name of the Event Hub that will receive Azure logs.",
-            "constraints": {
-              "required": true,
-              "regex": "^[a-zA-Z0-9][-a-zA-Z0-9]{0,49}$",
-              "validationMessage": "Must be 1-50 characters, starting with a letter or number."
-            }
-          }
-        ]
-      },
-      {
-        "name": "advanced",
-        "label": "Advanced",
-        "elements": [
-          {
-            "name": "betterStackIngestingHost",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Ingesting Host",
-            "defaultValue": "in.logs.betterstack.com",
-            "toolTip": "Better Stack log ingestion endpoint. Only change this if instructed by Better Stack support.",
-            "constraints": {
-              "required": true,
-              "regex": "^[a-zA-Z0-9][-a-zA-Z0-9.]{1,253}$",
-              "validationMessage": "Must be a valid hostname."
-            }
-          },
-          {
-            "name": "returnUrl",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Return URL",
-            "defaultValue": "",
-            "toolTip": "URL to return to after deployment completes. Pre-filled by Better Stack.",
-            "constraints": {
-              "required": false
-            },
-            "visible": false
           }
         ]
       }
     ],
     "outputs": {
-      "servicePrincipalObjectId": "[basics('servicePrincipalObjectId')]",
-      "betterStackSourceId": "[basics('betterStackSourceId')]",
-      "betterStackSourceToken": "[basics('betterStackSourceToken')]",
       "location": "[location()]",
-      "resourceGroupName": "[steps('deployment').resourceGroupName]",
-      "eventHubName": "[steps('deployment').eventHubName]",
-      "betterStackIngestingHost": "[steps('advanced').betterStackIngestingHost]",
-      "returnUrl": "[steps('advanced').returnUrl]"
+      "resourceGroupName": "[steps('deployment').resourceGroupName]"
     }
   }
 }

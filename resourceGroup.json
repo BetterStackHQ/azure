@@ -33,13 +33,6 @@
         "description": "Better Stack source ID (e.g. s12345). Used to identify resources belonging to this source."
       }
     },
-    "eventHubName": {
-      "type": "string",
-      "defaultValue": "logs",
-      "metadata": {
-        "description": "Name of the Event Hub within the namespace."
-      }
-    },
     "returnUrl": {
       "type": "string",
       "defaultValue": "",
@@ -49,6 +42,7 @@
     }
   },
   "variables": {
+    "eventHubName": "logs",
     "namespaceName": "[concat('bs-', parameters('betterStackSourceId'), '-', parameters('location'))]",
     "monitoringReaderRoleId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
     "monitoringContributorRoleId": "749f88d5-cbae-40b8-bcfc-e573ddc772fa",
@@ -99,7 +93,7 @@
     {
       "type": "Microsoft.EventHub/namespaces/eventhubs",
       "apiVersion": "2024-01-01",
-      "name": "[concat(variables('namespaceName'), '/', parameters('eventHubName'))]",
+      "name": "[concat(variables('namespaceName'), '/', variables('eventHubName'))]",
       "dependsOn": [
         "[resourceId('Microsoft.EventHub/namespaces', variables('namespaceName'))]"
       ],
@@ -111,9 +105,9 @@
     {
       "type": "Microsoft.EventHub/namespaces/eventhubs/consumergroups",
       "apiVersion": "2024-01-01",
-      "name": "[concat(variables('namespaceName'), '/', parameters('eventHubName'), '/vector-consumer-group')]",
+      "name": "[concat(variables('namespaceName'), '/', variables('eventHubName'), '/vector-consumer-group')]",
       "dependsOn": [
-        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', variables('namespaceName'), parameters('eventHubName'))]"
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', variables('namespaceName'), variables('eventHubName'))]"
       ]
     },
     {
@@ -149,7 +143,7 @@
       "location": "[parameters('location')]",
       "dependsOn": [
         "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'VectorListen')]",
-        "[resourceId('Microsoft.EventHub/namespaces/eventhubs/consumergroups', variables('namespaceName'), parameters('eventHubName'), 'vector-consumer-group')]"
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs/consumergroups', variables('namespaceName'), variables('eventHubName'), 'vector-consumer-group')]"
       ],
       "properties": {
         "containers": [
@@ -183,7 +177,7 @@
                 },
                 {
                   "name": "EVENTHUB_NAME",
-                  "value": "[parameters('eventHubName')]"
+                  "value": "[variables('eventHubName')]"
                 },
                 {
                   "name": "BETTERSTACK_INGESTING_HOST",
@@ -205,7 +199,7 @@
     },
     "eventHubName": {
       "type": "string",
-      "value": "[parameters('eventHubName')]"
+      "value": "[variables('eventHubName')]"
     },
     "note": {
       "type": "string",
