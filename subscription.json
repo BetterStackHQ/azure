@@ -38,13 +38,6 @@
       "metadata": {
         "description": "Better Stack source ID (e.g. s12345). Used to identify resources belonging to this source."
       }
-    },
-    "returnUrl": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "URL to return to after deployment completes (shown in deployment outputs)."
-      }
     }
   },
   "variables": {
@@ -52,7 +45,8 @@
     "nestedDeploymentName": "[concat('betterstack-resources-', parameters('betterStackSourceId'), '-', parameters('location'))]",
     "monitoringReaderRoleId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
     "monitoringContributorRoleId": "749f88d5-cbae-40b8-bcfc-e573ddc772fa",
-    "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+    "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+    "eventHubsDataOwnerRoleId": "f526a384-b230-433a-b45c-95f59c4a2dec"
   },
   "resources": [
     {
@@ -116,6 +110,9 @@
           },
           "betterStackSourceId": {
             "value": "[parameters('betterStackSourceId')]"
+          },
+          "servicePrincipalObjectId": {
+            "value": "[parameters('servicePrincipalObjectId')]"
           }
         },
         "template": {
@@ -133,11 +130,15 @@
             },
             "betterStackSourceId": {
               "type": "string"
+            },
+            "servicePrincipalObjectId": {
+              "type": "string"
             }
           },
           "variables": {
             "eventHubName": "logs",
-            "namespaceName": "[concat('bs-', parameters('betterStackSourceId'), '-', parameters('location'))]"
+            "namespaceName": "[concat('betterstack-', parameters('betterStackSourceId'), '-', parameters('location'))]",
+            "eventHubsDataOwnerRoleId": "f526a384-b230-433a-b45c-95f59c4a2dec"
           },
           "resources": [
             {
@@ -149,6 +150,20 @@
                 "name": "Standard",
                 "tier": "Standard",
                 "capacity": 1
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.EventHub/namespaces/{0}', variables('namespaceName'))]",
+              "name": "[guid(resourceId('Microsoft.EventHub/namespaces', variables('namespaceName')), parameters('servicePrincipalObjectId'), variables('eventHubsDataOwnerRoleId'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', variables('namespaceName'))]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('eventHubsDataOwnerRoleId'))]",
+                "principalId": "[parameters('servicePrincipalObjectId')]",
+                "principalType": "ServicePrincipal"
               }
             },
             {
@@ -200,7 +215,7 @@
             {
               "type": "Microsoft.ContainerInstance/containerGroups",
               "apiVersion": "2023-05-01",
-              "name": "[concat('bs-vector-', parameters('betterStackSourceId'), '-', parameters('location'))]",
+              "name": "[concat('betterstack-vector-', parameters('betterStackSourceId'), '-', parameters('location'))]",
               "location": "[parameters('location')]",
               "dependsOn": [
                 "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'VectorListen')]",
@@ -325,10 +340,6 @@
     "eventHubName": {
       "type": "string",
       "value": "[variables('eventHubName')]"
-    },
-    "nextStepsUrl": {
-      "type": "string",
-      "value": "[if(empty(parameters('returnUrl')), 'https://betterstack.com/integrations/azure', parameters('returnUrl'))]"
     }
   }
 }
