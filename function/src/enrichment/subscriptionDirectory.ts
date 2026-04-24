@@ -1,7 +1,9 @@
 import { TokenCredential } from "@azure/identity";
-import { SubscriptionClient } from "@azure/arm-subscriptions";
 
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+const ARM_SCOPE = "https://management.azure.com/.default";
+const ARM_BASE = "https://management.azure.com";
+const API_VERSION = "2022-12-01";
 
 export interface SubscriptionSummary {
   subscriptionId?: string;
@@ -9,6 +11,11 @@ export interface SubscriptionSummary {
 }
 
 export type SubscriptionFetcher = () => AsyncIterable<SubscriptionSummary>;
+
+interface SubscriptionsResponse {
+  value: Array<{ subscriptionId?: string; displayName?: string }>;
+  nextLink?: string;
+}
 
 export class SubscriptionDirectory {
   private entries = new Map<string, string>();
@@ -18,9 +25,7 @@ export class SubscriptionDirectory {
   private readonly fetcher: SubscriptionFetcher;
 
   constructor(credential: TokenCredential, fetcher?: SubscriptionFetcher) {
-    this.fetcher =
-      fetcher ??
-      (() => new SubscriptionClient(credential).subscriptions.list() as AsyncIterable<SubscriptionSummary>);
+    this.fetcher = fetcher ?? (() => listSubscriptionsViaRest(credential));
   }
 
   get isReady(): boolean {
@@ -75,5 +80,22 @@ export class SubscriptionDirectory {
     } finally {
       this.inflight = null;
     }
+  }
+}
+
+async function* listSubscriptionsViaRest(
+  credential: TokenCredential,
+): AsyncIterable<SubscriptionSummary> {
+  const token = await credential.getToken(ARM_SCOPE);
+  if (!token) throw new Error("failed to acquire ARM token");
+  const headers = { Authorization: `Bearer ${token.token}` };
+
+  let url: string | undefined = `${ARM_BASE}/subscriptions?api-version=${API_VERSION}`;
+  while (url) {
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`subscriptions list failed: ${res.status}`);
+    const body = (await res.json()) as SubscriptionsResponse;
+    for (const sub of body.value) yield sub;
+    url = body.nextLink;
   }
 }

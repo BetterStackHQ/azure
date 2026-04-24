@@ -166,12 +166,11 @@
         "httpsOnly": true,
         "reserved": true,
         "siteConfig": {
-          "linuxFxVersion": "NODE|20",
+          "linuxFxVersion": "NODE|22",
           "minTlsVersion": "1.2",
           "appSettings": [
             { "name": "FUNCTIONS_EXTENSION_VERSION", "value": "~4" },
             { "name": "FUNCTIONS_WORKER_RUNTIME", "value": "node" },
-            { "name": "WEBSITE_NODE_DEFAULT_VERSION", "value": "~20" },
             { "name": "WEBSITE_RUN_FROM_PACKAGE", "value": "[parameters('functionPackageUri')]" },
             { "name": "AzureWebJobsStorage__accountName", "value": "[variables('storageAccountName')]" },
             { "name": "AzureWebJobsStorage__credential", "value": "managedidentity" },
