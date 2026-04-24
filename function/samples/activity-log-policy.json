@@ -1,0 +1,18 @@
+{
+  "records": [
+    {
+      "time": "2026-04-24T10:05:12.1234567Z",
+      "operationName": "MICROSOFT.AUTHORIZATION/POLICIES/AUDIT/ACTION",
+      "category": "Policy",
+      "resultType": "Success",
+      "correlationId": "b3c4d5e6-f7a8-4901-b234-567890abcdef",
+      "level": "Warning",
+      "resourceId": "/SUBSCRIPTIONS/645383E7-89F3-4494-B695-EDFE4B926223/RESOURCEGROUPS/RG-WEB/PROVIDERS/MICROSOFT.STORAGE/STORAGEACCOUNTS/STACCT1",
+      "properties": {
+        "policyDefinitionId": "/providers/Microsoft.Authorization/policyDefinitions/abc-123",
+        "policyAssignmentScope": "/subscriptions/645383e7-89f3-4494-b695-edfe4b926223",
+        "isCompliant": "false"
+      }
+    }
+  ]
+}

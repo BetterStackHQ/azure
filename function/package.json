@@ -1,0 +1,29 @@
+{
+  "name": "betterstack-azure-forwarder",
+  "version": "1.0.0",
+  "description": "Azure Function that forwards enriched Azure activity logs from Event Hub to Better Stack",
+  "main": "dist/src/index.js",
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rm -rf dist",
+    "start": "func start",
+    "test": "node --test --import tsx test/*.test.ts",
+    "prepackage": "npm run clean && npm run build",
+    "package": "zip -r function.zip host.json package.json dist node_modules -x 'node_modules/.cache/*' -x 'node_modules/.bin/*'"
+  },
+  "dependencies": {
+    "@azure/arm-resources": "^7.0.0",
+    "@azure/arm-subscriptions": "^6.0.0",
+    "@azure/functions": "^4.14.0",
+    "@azure/identity": "^4.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.0"
+  }
+}

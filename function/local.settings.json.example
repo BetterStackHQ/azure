@@ -1,0 +1,17 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+
+    "EventHubConnection": "Endpoint=sb://<namespace>.servicebus.windows.net/;SharedAccessKeyName=<rule>;SharedAccessKey=<key>;EntityPath=logs",
+    "EVENTHUB_NAME": "logs",
+    "EVENTHUB_CONSUMER_GROUP": "function-consumer-group",
+
+    "BETTERSTACK_SOURCE_TOKEN": "replace-me",
+    "BETTERSTACK_INGESTING_HOST": "s4267.g1.betterstackdata.com",
+    "BETTERSTACK_SOURCE_ID": "s4267",
+
+    "AZURE_SUBSCRIPTION_ID": "00000000-0000-0000-0000-000000000000"
+  }
+}

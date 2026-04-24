@@ -1,0 +1,27 @@
+{
+  "records": [
+    {
+      "time": "2026-04-24T11:30:00.0000000Z",
+      "operationName": "MICROSOFT.RESOURCEHEALTH/HEALTHEVENT/INCIDENT/ACTION",
+      "category": "ServiceHealth",
+      "resultType": "Informational",
+      "correlationId": "service-health-7890abcd",
+      "level": "Informational",
+      "resourceId": "/subscriptions/645383e7-89f3-4494-b695-edfe4b926223",
+      "properties": {
+        "eventSource": "ServiceHealth",
+        "eventProperties": {
+          "service": "Event Hubs",
+          "region": "West Europe",
+          "communication": "Investigating elevated error rates for Event Hub operations in West Europe.",
+          "incidentType": "Incident",
+          "trackingId": "XYZ1-ABC",
+          "impactStartTime": "2026-04-24T11:00:00Z",
+          "impactedServices": "Event Hubs",
+          "defaultLanguageContent": "Investigating elevated error rates for Event Hub operations in West Europe.",
+          "stage": "Active"
+        }
+      }
+    }
+  ]
+}

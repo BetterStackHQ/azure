@@ -8,7 +8,7 @@
       "basics": {
         "location": {
           "label": "Region",
-          "toolTip": "Azure region for the EventHub and Vector container. Resource logs can only be forwarded from resources in this same region. Metrics and activity logs are collected across all regions regardless.",
+          "toolTip": "Azure region for the Event Hub and Function App. Resource logs can only be forwarded from resources in this same region. Metrics and activity logs are collected across all regions regardless.",
           "visible": true
         }
       }
@@ -24,7 +24,7 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Resource Group Name",
             "defaultValue": "rg-betterstack",
-            "toolTip": "A new resource group will be created with this name to hold the EventHub and Vector container.",
+            "toolTip": "A new resource group will be created with this name to hold the Event Hub and Function App.",
             "constraints": {
               "required": true,
               "regex": "^[-\\w._()]{1,90}$",

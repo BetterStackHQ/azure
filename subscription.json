@@ -35,15 +35,23 @@
     },
     "betterStackSourceId": {
       "type": "string",
+      "minLength": 2,
+      "maxLength": 20,
       "metadata": {
-        "description": "Better Stack source ID (e.g. s12345). Used to identify resources belonging to this source."
+        "description": "Better Stack source ID (e.g. s12345). Must be 2-20 characters, will be lowercased for resource naming."
+      }
+    },
+    "functionPackageUri": {
+      "type": "string",
+      "defaultValue": "https://github.com/BetterStackHQ/azure/releases/download/function-v1.0.0/function.zip",
+      "metadata": {
+        "description": "Public URL of the Function deployment zip. Default points at the pinned release."
       }
     }
   },
   "variables": {
     "eventHubName": "logs",
     "nestedDeploymentName": "[concat('betterstack-resources-', parameters('betterStackSourceId'), '-', parameters('location'))]",
-    "monitoringReaderRoleId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
     "monitoringContributorRoleId": "749f88d5-cbae-40b8-bcfc-e573ddc772fa",
     "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
     "eventHubsDataOwnerRoleId": "f526a384-b230-433a-b45c-95f59c4a2dec"
@@ -58,29 +66,9 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "name": "[guid(subscription().subscriptionId, parameters('servicePrincipalObjectId'), variables('monitoringReaderRoleId'))]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringReaderRoleId'))]",
-        "principalId": "[parameters('servicePrincipalObjectId')]",
-        "principalType": "ServicePrincipal"
-      }
-    },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
       "name": "[guid(subscription().subscriptionId, parameters('servicePrincipalObjectId'), variables('monitoringContributorRoleId'))]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringContributorRoleId'))]",
-        "principalId": "[parameters('servicePrincipalObjectId')]",
-        "principalType": "ServicePrincipal"
-      }
-    },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(subscription().subscriptionId, parameters('servicePrincipalObjectId'), variables('readerRoleId'))]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('readerRoleId'))]",
         "principalId": "[parameters('servicePrincipalObjectId')]",
         "principalType": "ServicePrincipal"
       }
@@ -113,6 +101,9 @@
           },
           "servicePrincipalObjectId": {
             "value": "[parameters('servicePrincipalObjectId')]"
+          },
+          "functionPackageUri": {
+            "value": "[parameters('functionPackageUri')]"
           }
         },
         "template": {
@@ -133,12 +124,25 @@
             },
             "servicePrincipalObjectId": {
               "type": "string"
+            },
+            "functionPackageUri": {
+              "type": "string"
             }
           },
           "variables": {
             "eventHubName": "logs",
-            "namespaceName": "[concat('betterstack-', parameters('betterStackSourceId'), '-', parameters('location'))]",
-            "eventHubsDataOwnerRoleId": "f526a384-b230-433a-b45c-95f59c4a2dec"
+            "consumerGroupName": "function-consumer-group",
+            "sourceIdSafe": "[toLower(parameters('betterStackSourceId'))]",
+            "locationSafe": "[toLower(parameters('location'))]",
+            "namespaceName": "[concat('betterstack-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
+            "storageAccountName": "[concat('bsfn', uniqueString(resourceGroup().id, variables('sourceIdSafe'), variables('locationSafe')))]",
+            "planName": "[concat('asp-bs-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
+            "functionAppName": "[concat('func-bs-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
+            "eventHubsDataOwnerRoleId": "f526a384-b230-433a-b45c-95f59c4a2dec",
+            "eventHubsDataReceiverRoleId": "a638d3c7-ab3a-418d-83e6-5f17a39d4fde",
+            "storageBlobDataOwnerRoleId": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
+            "storageAccountContributorRoleId": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
+            "storageQueueDataContributorRoleId": "974c5e8b-45b9-4653-ba55-5f855dd0fb88"
           },
           "resources": [
             {
@@ -181,7 +185,7 @@
             {
               "type": "Microsoft.EventHub/namespaces/eventhubs/consumergroups",
               "apiVersion": "2024-01-01",
-              "name": "[concat(variables('namespaceName'), '/', variables('eventHubName'), '/vector-consumer-group')]",
+              "name": "[concat(variables('namespaceName'), '/', variables('eventHubName'), '/', variables('consumerGroupName'))]",
               "dependsOn": [
                 "[resourceId('Microsoft.EventHub/namespaces/eventhubs', variables('namespaceName'), variables('eventHubName'))]"
               ]
@@ -200,71 +204,127 @@
               }
             },
             {
-              "type": "Microsoft.EventHub/namespaces/authorizationRules",
-              "apiVersion": "2024-01-01",
-              "name": "[concat(variables('namespaceName'), '/VectorListen')]",
-              "dependsOn": [
-                "[resourceId('Microsoft.EventHub/namespaces', variables('namespaceName'))]"
-              ],
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-01-01",
+              "name": "[variables('storageAccountName')]",
+              "location": "[parameters('location')]",
+              "kind": "StorageV2",
+              "sku": {
+                "name": "Standard_LRS"
+              },
               "properties": {
-                "rights": [
-                  "Listen"
-                ]
+                "allowBlobPublicAccess": false,
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": true
               }
             },
             {
-              "type": "Microsoft.ContainerInstance/containerGroups",
-              "apiVersion": "2023-05-01",
-              "name": "[concat('betterstack-vector-', parameters('betterStackSourceId'), '-', parameters('location'))]",
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2022-09-01",
+              "name": "[variables('planName')]",
               "location": "[parameters('location')]",
+              "kind": "functionapp",
+              "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+              },
+              "properties": {
+                "reserved": true
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2022-09-01",
+              "name": "[variables('functionAppName')]",
+              "location": "[parameters('location')]",
+              "kind": "functionapp,linux",
+              "identity": {
+                "type": "SystemAssigned"
+              },
               "dependsOn": [
-                "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'VectorListen')]",
-                "[resourceId('Microsoft.EventHub/namespaces/eventhubs/consumergroups', variables('namespaceName'), variables('eventHubName'), 'vector-consumer-group')]"
+                "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.EventHub/namespaces/eventhubs/consumergroups', variables('namespaceName'), variables('eventHubName'), variables('consumerGroupName'))]"
               ],
               "properties": {
-                "containers": [
-                  {
-                    "name": "vector",
-                    "properties": {
-                      "image": "ghcr.io/vectordotdev/vector:latest-debian",
-                      "resources": {
-                        "requests": {
-                          "cpu": 1,
-                          "memoryInGB": 1
-                        }
-                      },
-                      "command": [
-                        "/bin/sh",
-                        "-c",
-                        "cat > /etc/vector/vector.toml << 'VECTORCFG'\n[sources.azure_event_hub]\ntype = \"kafka\"\nbootstrap_servers = \"${EVENTHUB_NAMESPACE_FQDN}:9093\"\ngroup_id = \"vector-consumer-group\"\ntopics = [\"${EVENTHUB_NAME}\"]\nsasl.enabled = true\nsasl.mechanism = \"PLAIN\"\nsasl.username = \"$$ConnectionString\"\nsasl.password = \"${EVENTHUB_CONNECTION_STRING}\"\ntls.enabled = true\ndecoding.codec = \"json\"\n\n[transforms.rename_timestamp]\ntype = \"remap\"\ninputs = [\"azure_event_hub\"]\nsource = \".dt = del(.timestamp)\"\n\n[sinks.betterstack]\ntype = \"http\"\ninputs = [\"rename_timestamp\"]\nuri = \"https://${BETTERSTACK_INGESTING_HOST}\"\nmethod = \"post\"\nencoding.codec = \"json\"\ncompression = \"gzip\"\nauth.strategy = \"bearer\"\nauth.token = \"${BETTERSTACK_SOURCE_TOKEN}\"\nbatch.max_bytes = 1048576\nbatch.timeout_secs = 1\nrequest.retry_attempts = 3\nrequest.timeout_secs = 30\nVECTORCFG\nexec vector --config /etc/vector/vector.toml"
-                      ],
-                      "environmentVariables": [
-                        {
-                          "name": "EVENTHUB_CONNECTION_STRING",
-                          "secureValue": "[listKeys(resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'VectorListen'), '2024-01-01').primaryConnectionString]"
-                        },
-                        {
-                          "name": "BETTERSTACK_SOURCE_TOKEN",
-                          "secureValue": "[parameters('betterStackSourceToken')]"
-                        },
-                        {
-                          "name": "EVENTHUB_NAMESPACE_FQDN",
-                          "value": "[concat(variables('namespaceName'), '.servicebus.windows.net')]"
-                        },
-                        {
-                          "name": "EVENTHUB_NAME",
-                          "value": "[variables('eventHubName')]"
-                        },
-                        {
-                          "name": "BETTERSTACK_INGESTING_HOST",
-                          "value": "[parameters('betterStackIngestingHost')]"
-                        }
-                      ]
-                    }
-                  }
-                ],
-                "osType": "Linux",
-                "restartPolicy": "Always"
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+                "httpsOnly": true,
+                "reserved": true,
+                "siteConfig": {
+                  "linuxFxVersion": "NODE|20",
+                  "minTlsVersion": "1.2",
+                  "appSettings": [
+                    { "name": "FUNCTIONS_EXTENSION_VERSION", "value": "~4" },
+                    { "name": "FUNCTIONS_WORKER_RUNTIME", "value": "node" },
+                    { "name": "WEBSITE_NODE_DEFAULT_VERSION", "value": "~20" },
+                    { "name": "WEBSITE_RUN_FROM_PACKAGE", "value": "[parameters('functionPackageUri')]" },
+                    { "name": "AzureWebJobsStorage__accountName", "value": "[variables('storageAccountName')]" },
+                    { "name": "AzureWebJobsStorage__credential", "value": "managedidentity" },
+                    { "name": "EventHubConnection__fullyQualifiedNamespace", "value": "[concat(variables('namespaceName'), '.servicebus.windows.net')]" },
+                    { "name": "EventHubConnection__credential", "value": "managedidentity" },
+                    { "name": "EVENTHUB_NAME", "value": "[variables('eventHubName')]" },
+                    { "name": "EVENTHUB_CONSUMER_GROUP", "value": "[variables('consumerGroupName')]" },
+                    { "name": "BETTERSTACK_SOURCE_TOKEN", "value": "[parameters('betterStackSourceToken')]" },
+                    { "name": "BETTERSTACK_INGESTING_HOST", "value": "[parameters('betterStackIngestingHost')]" },
+                    { "name": "BETTERSTACK_SOURCE_ID", "value": "[parameters('betterStackSourceId')]" }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.EventHub/namespaces/{0}', variables('namespaceName'))]",
+              "name": "[guid(resourceId('Microsoft.EventHub/namespaces', variables('namespaceName')), variables('functionAppName'), variables('eventHubsDataReceiverRoleId'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('eventHubsDataReceiverRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('functionAppName'), variables('storageBlobDataOwnerRoleId'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataOwnerRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('functionAppName'), variables('storageAccountContributorRoleId'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageAccountContributorRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('functionAppName'), variables('storageQueueDataContributorRoleId'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageQueueDataContributorRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
               }
             }
           ],
@@ -276,9 +336,30 @@
             "sendRuleId": {
               "type": "string",
               "value": "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'DiagnosticSettingsSend')]"
+            },
+            "functionAppPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]"
+            },
+            "functionAppName": {
+              "type": "string",
+              "value": "[variables('functionAppName')]"
             }
           }
         }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().subscriptionId, variables('nestedDeploymentName'), variables('readerRoleId'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', variables('nestedDeploymentName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('readerRoleId'))]",
+        "principalId": "[reference(variables('nestedDeploymentName')).outputs.functionAppPrincipalId.value]",
+        "principalType": "ServicePrincipal"
       }
     },
     {
@@ -286,44 +367,20 @@
       "apiVersion": "2021-05-01-preview",
       "name": "[concat('betterstack-activity-logs-', parameters('betterStackSourceId'), '-', parameters('location'))]",
       "dependsOn": [
-        "[variables('nestedDeploymentName')]"
+        "[resourceId('Microsoft.Resources/deployments', variables('nestedDeploymentName'))]"
       ],
       "properties": {
         "eventHubAuthorizationRuleId": "[reference(variables('nestedDeploymentName')).outputs.sendRuleId.value]",
         "eventHubName": "[variables('eventHubName')]",
         "logs": [
-          {
-            "category": "Administrative",
-            "enabled": true
-          },
-          {
-            "category": "Security",
-            "enabled": true
-          },
-          {
-            "category": "ServiceHealth",
-            "enabled": true
-          },
-          {
-            "category": "Alert",
-            "enabled": true
-          },
-          {
-            "category": "Recommendation",
-            "enabled": true
-          },
-          {
-            "category": "Policy",
-            "enabled": true
-          },
-          {
-            "category": "Autoscale",
-            "enabled": true
-          },
-          {
-            "category": "ResourceHealth",
-            "enabled": true
-          }
+          { "category": "Administrative", "enabled": true },
+          { "category": "Security", "enabled": true },
+          { "category": "ServiceHealth", "enabled": true },
+          { "category": "Alert", "enabled": true },
+          { "category": "Recommendation", "enabled": true },
+          { "category": "Policy", "enabled": true },
+          { "category": "Autoscale", "enabled": true },
+          { "category": "ResourceHealth", "enabled": true }
         ]
       }
     }
@@ -340,6 +397,10 @@
     "eventHubName": {
       "type": "string",
       "value": "[variables('eventHubName')]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "value": "[reference(variables('nestedDeploymentName')).outputs.functionAppName.value]"
     }
   }
 }
