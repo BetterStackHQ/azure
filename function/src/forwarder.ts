@@ -99,7 +99,7 @@ function requireEnv(name: string): string {
 app.eventHub("Forwarder", {
   connection: "EventHubConnection",
   eventHubName: process.env.EVENTHUB_NAME ?? "logs",
-  consumerGroup: process.env.EVENTHUB_CONSUMER_GROUP ?? "function-consumer-group",
+  consumerGroup: process.env.EVENTHUB_CONSUMER_GROUP ?? "betterstack-consumer-group",
   cardinality: "many",
   handler: handleBatch,
 });

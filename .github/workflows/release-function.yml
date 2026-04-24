@@ -37,9 +37,13 @@ jobs:
           zip -r function.zip host.json package.json dist node_modules \
             -x 'node_modules/.cache/*' -x 'node_modules/.bin/*'
 
-      - name: Attach zip to release
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
           gh release upload "${GITHUB_REF_NAME}" function.zip --clobber
-        working-directory: ${{ github.workspace }}

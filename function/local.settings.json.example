@@ -6,7 +6,7 @@
 
     "EventHubConnection": "Endpoint=sb://<namespace>.servicebus.windows.net/;SharedAccessKeyName=<rule>;SharedAccessKey=<key>;EntityPath=logs",
     "EVENTHUB_NAME": "logs",
-    "EVENTHUB_CONSUMER_GROUP": "function-consumer-group",
+    "EVENTHUB_CONSUMER_GROUP": "betterstack-consumer-group",
 
     "BETTERSTACK_SOURCE_TOKEN": "replace-me",
     "BETTERSTACK_INGESTING_HOST": "s4267.g1.betterstackdata.com",
