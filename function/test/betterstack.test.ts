@@ -51,7 +51,7 @@ test("posts gzipped ndjson with bearer auth on 200", async () => {
   assert.equal(result.sent, 2);
   assert.equal(result.dropped, 0);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "https://ingest.example.com");
+  assert.equal(calls[0].url, "https://ingest.example.com/azure");
   assert.equal(calls[0].headers["Authorization"], "Bearer tok");
   assert.equal(calls[0].headers["Content-Encoding"], "gzip");
   assert.equal(calls[0].headers["Content-Type"], "application/x-ndjson");

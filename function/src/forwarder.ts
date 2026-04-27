@@ -7,9 +7,6 @@ import { Enricher } from "./enrichment/enricher.js";
 import { BetterStackSink } from "./sink/betterstack.js";
 import { extractRecords } from "./extractRecords.js";
 
-const FORWARDER_VERSION = "1.0.0";
-const SOURCE_ID = requireEnv("BETTERSTACK_SOURCE_ID");
-
 const credential: TokenCredential = process.env.FUNCTIONS_WORKER_RUNTIME
   ? new ManagedIdentityCredential()
   : new DefaultAzureCredential();
@@ -17,14 +14,14 @@ const credential: TokenCredential = process.env.FUNCTIONS_WORKER_RUNTIME
 const operationsCatalog = new OperationsCatalog(credential);
 const subscriptionDirectory = new SubscriptionDirectory(credential);
 
-const enricher = new Enricher(operationsCatalog, subscriptionDirectory, {
-  sourceId: SOURCE_ID,
-  forwarderVersion: FORWARDER_VERSION,
-});
+const enricher = new Enricher(operationsCatalog, subscriptionDirectory);
+
+const INGESTING_HOST = requireEnv("BETTERSTACK_INGESTING_HOST");
+const SOURCE_TOKEN = requireEnv("BETTERSTACK_SOURCE_TOKEN");
 
 const sink = new BetterStackSink({
-  ingestingHost: requireEnv("BETTERSTACK_INGESTING_HOST"),
-  sourceToken: requireEnv("BETTERSTACK_SOURCE_TOKEN"),
+  ingestingHost: INGESTING_HOST,
+  sourceToken: SOURCE_TOKEN,
   logger: {
     warn: (msg) => console.warn(`[sink] ${msg}`),
     error: (msg) => console.error(`[sink] ${msg}`),
@@ -58,7 +55,7 @@ export async function handleBatch(
         context.warn(
           `enrichment threw, forwarding raw: ${(err as Error).message}`,
         );
-        enriched.push(toFallbackEnriched(record, (err as Error).message));
+        enriched.push(toFallbackEnriched(record));
       }
     }
   }
@@ -74,18 +71,13 @@ export async function handleBatch(
   );
 }
 
-function toFallbackEnriched(record: ActivityLogRecord, error: string): EnrichedRecord {
-  const { time, ...rest } = record;
+function toFallbackEnriched(record: ActivityLogRecord): EnrichedRecord {
   return {
-    ...rest,
-    dt: time,
-    azure: {
-      enrichment: {
-        status: "parse-error",
-        sourceId: SOURCE_ID,
-        forwarderVersion: FORWARDER_VERSION,
-        error,
-      },
+    ...record,
+    _azure_arm: {
+      subscription_name: null,
+      operation: null,
+      status: "parse-error",
     },
   };
 }

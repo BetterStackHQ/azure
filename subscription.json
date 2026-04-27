@@ -274,7 +274,7 @@
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "scope": "[format('Microsoft.EventHub/namespaces/{0}', variables('namespaceName'))]",
-              "name": "[guid(resourceId('Microsoft.EventHub/namespaces', variables('namespaceName')), variables('functionAppName'), variables('eventHubsDataReceiverRoleId'))]",
+              "name": "[guid(resourceId('Microsoft.EventHub/namespaces', variables('namespaceName')), reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId, variables('eventHubsDataReceiverRoleId'))]",
               "dependsOn": [
                 "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
               ],
@@ -288,7 +288,7 @@
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
-              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('functionAppName'), variables('storageBlobDataOwnerRoleId'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId, variables('storageBlobDataOwnerRoleId'))]",
               "dependsOn": [
                 "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
               ],
@@ -302,7 +302,7 @@
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
-              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('functionAppName'), variables('storageAccountContributorRoleId'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId, variables('storageAccountContributorRoleId'))]",
               "dependsOn": [
                 "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
               ],
@@ -316,7 +316,7 @@
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
-              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('functionAppName'), variables('storageQueueDataContributorRoleId'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId, variables('storageQueueDataContributorRoleId'))]",
               "dependsOn": [
                 "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
               ],

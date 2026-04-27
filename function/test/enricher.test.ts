@@ -40,9 +40,7 @@ const sampleRecord: ActivityLogRecord = {
   level: "Information",
 };
 
-const options = { sourceId: "s4267", forwarderVersion: "1.0.0" };
-
-test("ok: operation + subscription both resolve", () => {
+test("ok: operation + subscription both resolve, raw fields forwarded untouched", () => {
   const ops = fakeCatalog({
     ready: true,
     known: new Map([
@@ -63,23 +61,26 @@ test("ok: operation + subscription both resolve", () => {
     new Map([["645383e7-89f3-4494-b695-edfe4b926223", "Production"]]),
   );
 
-  const out = new Enricher(ops, dir, options).enrich(sampleRecord);
+  const out = new Enricher(ops, dir).enrich(sampleRecord);
 
-  assert.equal(out.azure.enrichment.status, "ok");
-  assert.equal(out.azure.subscriptionName, "Production");
-  assert.equal(out.azure.operation?.displayName, "Create or Update Container Group");
-  assert.equal(out.azure.resourceType, "CONTAINERGROUPS");
-  assert.equal(out.callerDisplayName, "alistair@evanson.ltd");
-  assert.equal(out.dt, "2026-04-24T09:22:09.8045981Z");
-  assert.equal((out as { time?: string }).time, undefined);
+  assert.equal(out._azure_arm.status, "ok");
+  assert.equal(out._azure_arm.subscription_name, "Production");
+  assert.equal(out._azure_arm.operation?.displayName, "Create or Update Container Group");
+
+  // Raw fields are forwarded untouched - no time->dt rename, no callerDisplayName,
+  // no azure block. Those transforms now happen in the ingester-side AzureMapper.
+  assert.equal(out.time, "2026-04-24T09:22:09.8045981Z");
+  assert.equal((out as { dt?: string }).dt, undefined);
+  assert.equal((out as { callerDisplayName?: string }).callerDisplayName, undefined);
+  assert.equal((out as { azure?: unknown }).azure, undefined);
 });
 
 test("pending: catalog not yet ready", () => {
   const ops = fakeCatalog({ ready: false, known: new Map() });
   const dir = fakeDirectory(false, new Map());
-  const out = new Enricher(ops, dir, options).enrich(sampleRecord);
-  assert.equal(out.azure.enrichment.status, "pending");
-  assert.equal(out.azure.operation, null);
+  const out = new Enricher(ops, dir).enrich(sampleRecord);
+  assert.equal(out._azure_arm.status, "pending");
+  assert.equal(out._azure_arm.operation, null);
 });
 
 test("unknown-operation: catalog ready but this op isn't in it", () => {
@@ -88,9 +89,9 @@ test("unknown-operation: catalog ready but this op isn't in it", () => {
     true,
     new Map([["645383e7-89f3-4494-b695-edfe4b926223", "Production"]]),
   );
-  const out = new Enricher(ops, dir, options).enrich(sampleRecord);
-  assert.equal(out.azure.enrichment.status, "unknown-operation");
-  assert.equal(out.azure.operation, null);
+  const out = new Enricher(ops, dir).enrich(sampleRecord);
+  assert.equal(out._azure_arm.status, "unknown-operation");
+  assert.equal(out._azure_arm.operation, null);
 });
 
 test("no-access: subscription not in directory though directory is ready", () => {
@@ -107,33 +108,9 @@ test("no-access: subscription not in directory though directory is ready", () =>
     ]),
   });
   const dir = fakeDirectory(true, new Map());
-  const out = new Enricher(ops, dir, options).enrich(sampleRecord);
-  assert.equal(out.azure.enrichment.status, "no-access");
-  assert.equal(out.azure.subscriptionName, null);
-});
-
-test("no identity claims: callerDisplayName omitted", () => {
-  const ops = fakeCatalog({ ready: true, known: new Map() });
-  const dir = fakeDirectory(true, new Map());
-  const out = new Enricher(ops, dir, options).enrich({
-    ...sampleRecord,
-    identity: undefined,
-  });
-  assert.equal(out.callerDisplayName, undefined);
-});
-
-test("schema-tagged claim is used when 'name' is absent", () => {
-  const ops = fakeCatalog({ ready: true, known: new Map() });
-  const dir = fakeDirectory(true, new Map());
-  const out = new Enricher(ops, dir, options).enrich({
-    ...sampleRecord,
-    identity: {
-      claims: {
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn": "alice@example.com",
-      },
-    },
-  });
-  assert.equal(out.callerDisplayName, "alice@example.com");
+  const out = new Enricher(ops, dir).enrich(sampleRecord);
+  assert.equal(out._azure_arm.status, "no-access");
+  assert.equal(out._azure_arm.subscription_name, null);
 });
 
 test("tenant-scoped resource (no subscription) still returns status ok", () => {
@@ -147,12 +124,11 @@ test("tenant-scoped resource (no subscription) still returns status ok", () => {
     ]),
   });
   const dir = fakeDirectory(true, new Map());
-  const out = new Enricher(ops, dir, options).enrich({
+  const out = new Enricher(ops, dir).enrich({
     time: "2026-04-24T00:00:00Z",
     operationName: "MICROSOFT.MANAGEMENT/MANAGEMENTGROUPS/READ",
     resourceId: "/providers/Microsoft.Management/managementGroups/root-mg",
   });
-  assert.equal(out.azure.enrichment.status, "ok");
-  assert.equal(out.azure.subscriptionId, undefined);
-  assert.equal(out.azure.subscriptionName, null);
+  assert.equal(out._azure_arm.status, "ok");
+  assert.equal(out._azure_arm.subscription_name, null);
 });
