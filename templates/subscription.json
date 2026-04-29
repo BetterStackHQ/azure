@@ -182,7 +182,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('deploymentContainerName'))]",
-        "[resourceId('Microsoft.Authorization/roleAssignments', variables('deployStorageRoleAssignmentName'))]"
+        "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'Microsoft.Authorization/roleAssignments', variables('deployStorageRoleAssignmentName'))]"
       ],
       "properties": {
         "azCliVersion": "2.59.0",
