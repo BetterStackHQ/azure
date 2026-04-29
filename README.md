@@ -91,13 +91,13 @@ If you'd rather skip the Better Stack dashboard's pre-filled portal link, you ca
 
 Deploys into a resource group of your choice, then creates the subscription-scope role assignments and the activity-log diagnostic setting via a nested cross-scope deployment.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FBetterStackHQ%2Fazure%2Fmain%2Fsubscription.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FBetterStackHQ%2Fazure%2Fmain%2Ftemplates%2Fsubscription.json)
 
 ```bash
 az group create --name rg-betterstack --location <region>
 az deployment group create \
   --resource-group rg-betterstack \
-  --template-file subscription.json \
+  --template-file templates/subscription.json \
   --parameters \
     servicePrincipalObjectId='<object-id>' \
     betterStackSourceId='<source-id>' \
@@ -109,13 +109,13 @@ az deployment group create \
 
 Use this to limit Better Stack to a single resource group. Activity-log forwarding is not available in this mode — activity logs are subscription-scope.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FBetterStackHQ%2Fazure%2Fmain%2FresourceGroup.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FBetterStackHQ%2Fazure%2Fmain%2Ftemplates%2FresourceGroup.json)
 
 ```bash
 az group create --name rg-betterstack --location <region>
 az deployment group create \
   --resource-group rg-betterstack \
-  --template-file resourceGroup.json \
+  --template-file templates/resourceGroup.json \
   --parameters \
     servicePrincipalObjectId='<object-id>' \
     betterStackSourceId='<source-id>' \
@@ -125,14 +125,14 @@ az deployment group create \
 
 ### Adding more regions
 
-Azure requires resource-log diagnostic settings to target an Event Hub in the same region as the resource. If you have resources outside your home region, run `region.json` once per additional region into the same resource group:
+Azure requires resource-log diagnostic settings to target an Event Hub in the same region as the resource. If you have resources outside your home region, run `templates/region.json` once per additional region into the same resource group:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FBetterStackHQ%2Fazure%2Fmain%2Fregion.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FBetterStackHQ%2Fazure%2Fmain%2Ftemplates%2Fregion.json)
 
 ```bash
 az deployment group create \
   --resource-group rg-betterstack \
-  --template-file region.json \
+  --template-file templates/region.json \
   --parameters \
     location='<region>' \
     betterStackSourceId='<source-id>' \
@@ -140,13 +140,13 @@ az deployment group create \
     betterStackIngestingHost='<ingesting-host>'
 ```
 
-`region.json` creates only a regional Event Hub and Function. It reuses the role assignments and the activity-log diagnostic setting from your subscription-level deployment, which always stays tied to a single home region.
+`templates/region.json` creates only a regional Event Hub and Function. It reuses the role assignments and the activity-log diagnostic setting from your subscription-level deployment, which always stays tied to a single home region.
 
 ## Releasing
 
 To release a new version of the Function:
 
-1. Update the version in the `functionPackageUri` default value in `subscription.json`, `resourceGroup.json`, and `region.json` (the URL ends with `function-v<version>/function.zip`).
+1. Update the version in the `functionPackageUri` default value in `templates/subscription.json`, `templates/resourceGroup.json`, and `templates/region.json` (the URL ends with `function-v<version>/function.zip`).
 2. Commit and push the changes.
 3. Tag the commit with `function-v<version>` and push the tag:
 
