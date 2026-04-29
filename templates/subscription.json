@@ -39,24 +39,29 @@
       "type": "string",
       "defaultValue": "https://github.com/BetterStackHQ/azure/releases/download/function-v1.0.3/function.zip",
       "metadata": {
-        "description": "Public URL of the Function deployment zip. Default points at the pinned release."
+        "description": "Public URL of the Function deployment zip. A deployment script downloads it and uploads it to the Function App's deployment-storage container."
       }
     }
   },
   "variables": {
     "eventHubName": "logs",
     "consumerGroupName": "betterstack-consumer-group",
+    "deploymentContainerName": "app-package",
     "sourceIdSafe": "[toLower(parameters('betterStackSourceId'))]",
     "locationSafe": "[toLower(parameters('location'))]",
     "namespaceName": "[concat('betterstack-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
     "storageAccountName": "[concat('betterstack', uniqueString(resourceGroup().id, variables('sourceIdSafe'), variables('locationSafe')))]",
     "planName": "[concat('betterstack-plan-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
     "functionAppName": "[concat('betterstack-func-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
+    "deployIdentityName": "[concat('betterstack-deploy-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
+    "uploadPackageScriptName": "[concat('upload-pkg-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
+    "deployStorageRoleAssignmentName": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('deployIdentityName'), variables('storageBlobDataContributorRoleId'))]",
     "subscriptionScopeDeploymentName": "[concat('betterstack-sub-', variables('sourceIdSafe'), '-', variables('locationSafe'))]",
     "sendAuthRuleId": "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('namespaceName'), 'DiagnosticSettingsSend')]",
     "eventHubsDataOwnerRoleId": "f526a384-b230-433a-b45c-95f59c4a2dec",
     "eventHubsDataReceiverRoleId": "a638d3c7-ab3a-418d-83e6-5f17a39d4fde",
     "storageBlobDataOwnerRoleId": "b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
+    "storageBlobDataContributorRoleId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
     "storageAccountContributorRoleId": "17d1049b-9a84-46fb-8f53-869881c3d3ab",
     "storageQueueDataContributorRoleId": "974c5e8b-45b9-4653-ba55-5f855dd0fb88"
   },
@@ -135,14 +140,73 @@
       }
     },
     {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('storageAccountName'), '/default/', variables('deploymentContainerName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('deployIdentityName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+      "name": "[variables('deployStorageRoleAssignmentName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('deployIdentityName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataContributorRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('deployIdentityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "[variables('uploadPackageScriptName')]",
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('deployIdentityName'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('deploymentContainerName'))]",
+        "[resourceId('Microsoft.Authorization/roleAssignments', variables('deployStorageRoleAssignmentName'))]"
+      ],
+      "properties": {
+        "azCliVersion": "2.59.0",
+        "timeout": "PT10M",
+        "retentionInterval": "PT1H",
+        "cleanupPreference": "OnSuccess",
+        "forceUpdateTag": "[parameters('functionPackageUri')]",
+        "environmentVariables": [
+          { "name": "PACKAGE_URL", "value": "[parameters('functionPackageUri')]" },
+          { "name": "STORAGE_ACCOUNT", "value": "[variables('storageAccountName')]" },
+          { "name": "CONTAINER", "value": "[variables('deploymentContainerName')]" }
+        ],
+        "scriptContent": "set -euo pipefail\ncurl -fsSL \"$PACKAGE_URL\" -o /tmp/function.zip\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n  if az storage blob upload --account-name \"$STORAGE_ACCOUNT\" --container-name \"$CONTAINER\" --name function.zip --file /tmp/function.zip --auth-mode login --overwrite; then\n    exit 0\n  fi\n  echo \"Upload attempt $attempt failed, sleeping 15s for role propagation...\"\n  sleep 15\ndone\necho \"Failed to upload function package after 10 attempts\"\nexit 1"
+      }
+    },
+    {
       "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2023-12-01",
       "name": "[variables('planName')]",
       "location": "[parameters('location')]",
       "kind": "functionapp",
       "sku": {
-        "name": "Y1",
-        "tier": "Dynamic"
+        "tier": "FlexConsumption",
+        "name": "FC1"
       },
       "properties": {
         "reserved": true
@@ -150,7 +214,7 @@
     },
     {
       "type": "Microsoft.Web/sites",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2023-12-01",
       "name": "[variables('functionAppName')]",
       "location": "[parameters('location')]",
       "kind": "functionapp,linux",
@@ -160,19 +224,35 @@
       "dependsOn": [
         "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-        "[resourceId('Microsoft.EventHub/namespaces/eventhubs/consumergroups', variables('namespaceName'), variables('eventHubName'), variables('consumerGroupName'))]"
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs/consumergroups', variables('namespaceName'), variables('eventHubName'), variables('consumerGroupName'))]",
+        "[resourceId('Microsoft.Resources/deploymentScripts', variables('uploadPackageScriptName'))]"
       ],
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
         "httpsOnly": true,
-        "reserved": true,
+        "publicNetworkAccess": "Disabled",
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[concat('https://', variables('storageAccountName'), '.blob.core.windows.net/', variables('deploymentContainerName'))]",
+              "authentication": {
+                "type": "SystemAssignedIdentity"
+              }
+            }
+          },
+          "scaleAndConcurrency": {
+            "maximumInstanceCount": 100,
+            "instanceMemoryMB": 512
+          },
+          "runtime": {
+            "name": "node",
+            "version": "22"
+          }
+        },
         "siteConfig": {
-          "linuxFxVersion": "NODE|22",
           "minTlsVersion": "1.2",
           "appSettings": [
-            { "name": "FUNCTIONS_EXTENSION_VERSION", "value": "~4" },
-            { "name": "FUNCTIONS_WORKER_RUNTIME", "value": "node" },
-            { "name": "WEBSITE_RUN_FROM_PACKAGE", "value": "[parameters('functionPackageUri')]" },
             { "name": "AzureWebJobsStorage__accountName", "value": "[variables('storageAccountName')]" },
             { "name": "AzureWebJobsStorage__credential", "value": "managedidentity" },
             { "name": "EventHubConnection__fullyQualifiedNamespace", "value": "[concat(variables('namespaceName'), '.servicebus.windows.net')]" },
@@ -196,7 +276,7 @@
       ],
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('eventHubsDataReceiverRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       }
     },
@@ -210,7 +290,7 @@
       ],
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataOwnerRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       }
     },
@@ -224,7 +304,7 @@
       ],
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageAccountContributorRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       }
     },
@@ -238,7 +318,7 @@
       ],
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageQueueDataContributorRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]",
         "principalType": "ServicePrincipal"
       }
     },
@@ -259,7 +339,7 @@
         },
         "parameters": {
           "servicePrincipalObjectId": { "value": "[parameters('servicePrincipalObjectId')]" },
-          "functionAppPrincipalId": { "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01', 'full').identity.principalId]" },
+          "functionAppPrincipalId": { "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'full').identity.principalId]" },
           "betterStackSourceId": { "value": "[parameters('betterStackSourceId')]" },
           "location": { "value": "[parameters('location')]" },
           "eventHubAuthorizationRuleId": { "value": "[variables('sendAuthRuleId')]" },
