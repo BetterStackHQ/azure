@@ -240,7 +240,6 @@
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
         "httpsOnly": true,
-        "publicNetworkAccess": "Disabled",
         "functionAppConfig": {
           "deployment": {
             "storage": {

@@ -6,7 +6,7 @@ ARM templates that connect an Azure subscription to [Better Stack](https://bette
 
 Better Stack reads **metrics** from your subscription via the Azure Monitor REST API, authenticating as a service principal that's created in your tenant when you grant admin consent through the Better Stack dashboard.
 
-**Logs** are routed through resources that the templates in this repo deploy: an Event Hub Namespace, an Azure Function (Node.js 22, Consumption plan), and a Storage account. Diagnostic settings — created by the template for activity logs and by Better Stack for per-resource logs — send events to the Event Hub. The Function consumes them, attaches a small amount of context (operation display name, subscription name) for downstream search, and forwards gzipped NDJSON batches to Better Stack over HTTPS.
+**Logs** are routed through resources that the templates in this repo deploy: an Event Hub Namespace, an Azure Function (Node.js 22, Flex Consumption plan), and a Storage account. Diagnostic settings — created by the template for activity logs and by Better Stack for per-resource logs — send events to the Event Hub. The Function consumes them, attaches a small amount of context (operation display name, subscription name) for downstream search, and forwards gzipped NDJSON batches to Better Stack over HTTPS.
 
 The Function authenticates to its dependencies via system-assigned managed identity. The only secret stored in your tenant is the Better Stack source token, kept as an encrypted Function App setting.
 
@@ -21,8 +21,9 @@ You'll need an Azure account with **Owner** on the target subscription (for the 
 Inside the resource group:
 
 - **Event Hub Namespace** (Standard SKU) hosting an Event Hub `logs` with 4 partitions and 1-day retention, plus a `betterstack-consumer-group` consumer group and a `DiagnosticSettingsSend` authorization rule.
-- **Storage Account** required by the Functions host runtime.
-- **App Service Plan** (Y1 Consumption) and **Function App** (Linux, Node.js 22) running the log forwarder.
+- **Storage Account** that backs the Functions host runtime and also holds the Function deployment package in an `app-package` blob container.
+- **App Service Plan** (FC1 Flex Consumption) and **Function App** (Linux, Node.js 22, public network access disabled, 512 MB instance) running the log forwarder.
+- **User-assigned managed identity** plus a one-shot **deployment script** (Azure CLI in a transient ACI) that downloads the pinned release zip from GitHub and uploads it to the `app-package` container as `released-package.zip` (the blob name Flex Consumption's direct-blob deployment mode looks for).
 
 For subscription-level deployments, three additional resources are created at subscription scope:
 
@@ -37,20 +38,17 @@ For subscription-level deployments, three additional resources are created at su
 | Better Stack SP | Monitoring Contributor | Subscription / RG | Create and modify per-resource diagnostic settings; subsumes Monitoring Reader and Reader |
 | Better Stack SP | Event Hubs Data Owner | Event Hub namespace | Resolve the `DiagnosticSettingsSend` rule when wiring per-resource diagnostic settings |
 | Function MI | Event Hubs Data Receiver | Event Hub namespace | Consume from the `logs` hub |
-| Function MI | Storage Blob Data Owner, Storage Queue Data Contributor, Storage Account Contributor | Function's storage account | Functions host internals (leases, key rotation, internal queues) |
+| Function MI | Storage Blob Data Owner, Storage Queue Data Contributor, Storage Account Contributor | Function's storage account | Functions host internals (leases, key rotation, internal queues) plus reading the deployment package from the `app-package` container |
 | Function MI | Reader | Subscription / RG | `subscriptions.list()` for subscription-name enrichment |
+| Deployment-script MI | Storage Blob Data Contributor | Function's storage account | Upload `released-package.zip` into the `app-package` container during deployment (one-shot) |
 
 Better Stack itself authenticates from outside your tenant via a multi-tenant app and client secret kept in Better Stack infrastructure. No Better Stack credentials are stored in your tenant.
 
 ## Verifying the deployment
 
-The Function App begins consuming events almost immediately after deployment. To watch it:
+The Function App begins consuming events almost immediately after the deployment script finishes uploading the package (typically 1–2 minutes after the ARM deployment kicks off). Activity-log events typically begin flowing within a few minutes. Per-resource logs and metrics begin once Better Stack registers the integration on our side.
 
-```bash
-az functionapp log tail --resource-group rg-betterstack --name <function-app-name>
-```
-
-Activity-log events typically begin flowing within a few minutes. Per-resource logs and metrics begin once Better Stack registers the integration on our side.
+Because public network access to the Function App is disabled, `az functionapp log tail` won't reach the SCM endpoint over the public internet. Verify activity instead from the Better Stack source view, or from the Event Hub metrics blade in the portal (incoming messages on the `logs` hub).
 
 ## Uninstall
 
@@ -70,9 +68,15 @@ az monitor diagnostic-settings subscription delete \
 az role assignment delete \
   --assignee <service-principal-object-id> \
   --role "Monitoring Contributor"
-```
 
-The Function MI's `Reader` role assignment is cleaned up automatically when the Function App is deleted with the resource group.
+# Role assignment for the Function MI (its principal is gone with the RG, so
+# look up the orphaned assignment by scope + role and delete by ID)
+az role assignment list \
+  --scope /subscriptions/<subscription-id> \
+  --role Reader \
+  --query "[?contains(principalName, 'Identity not found')].id" -o tsv \
+  | xargs -r -n1 az role assignment delete --ids
+```
 
 ## Deploying manually
 
