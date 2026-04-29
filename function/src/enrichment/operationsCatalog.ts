@@ -4,22 +4,24 @@ import { OperationDefinition } from "../types.js";
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const ARM_SCOPE = "https://management.azure.com/.default";
 const ARM_BASE = "https://management.azure.com";
-const API_VERSION = "2021-04-01";
+const API_VERSION = "2022-04-01";
 
-interface ProviderResponse {
-  value: Array<{ namespace?: string }>;
-  nextLink?: string;
+interface OperationMetadata {
+  name?: string;
+  displayName?: string;
+  description?: string;
 }
 
-interface OperationsResponse {
+interface ProviderOperationsResponse {
   value: Array<{
     name?: string;
-    display?: {
-      provider?: string;
-      resource?: string;
-      operation?: string;
-      description?: string;
-    };
+    displayName?: string;
+    operations?: OperationMetadata[];
+    resourceTypes?: Array<{
+      name?: string;
+      displayName?: string;
+      operations?: OperationMetadata[];
+    }>;
   }>;
   nextLink?: string;
 }
@@ -74,23 +76,36 @@ export class OperationsCatalog {
       const headers = { Authorization: `Bearer ${token.token}` };
       const next = new Map<string, OperationDefinition>();
 
-      const providers = await this.listAllProviders(headers);
-      const results = await Promise.allSettled(
-        providers.map((ns) => this.listOperationsForProvider(ns, headers)),
-      );
-
-      for (const r of results) {
-        if (r.status !== "fulfilled") continue;
-        for (const op of r.value) {
-          if (!op.name) continue;
-          next.set(op.name.toUpperCase(), {
-            name: op.name,
-            operationDisplayName: op.display?.operation,
-            description: op.display?.description,
-            resourceProviderDisplayName: op.display?.provider,
-            resourceTypeDisplayName: op.display?.resource,
-          });
+      let url: string | undefined =
+        `${ARM_BASE}/providers/Microsoft.Authorization/providerOperations?api-version=${API_VERSION}&$expand=resourceTypes`;
+      while (url) {
+        const res = await fetch(url, { headers });
+        if (!res.ok) throw new Error(`providerOperations list failed: ${res.status}`);
+        const body = (await res.json()) as ProviderOperationsResponse;
+        for (const provider of body.value) {
+          for (const op of provider.operations ?? []) {
+            if (!op.name) continue;
+            next.set(op.name.toUpperCase(), {
+              name: op.name,
+              operationDisplayName: op.displayName,
+              description: op.description,
+              resourceProviderDisplayName: provider.displayName,
+            });
+          }
+          for (const rt of provider.resourceTypes ?? []) {
+            for (const op of rt.operations ?? []) {
+              if (!op.name) continue;
+              next.set(op.name.toUpperCase(), {
+                name: op.name,
+                operationDisplayName: op.displayName,
+                description: op.description,
+                resourceProviderDisplayName: provider.displayName,
+                resourceTypeDisplayName: rt.displayName,
+              });
+            }
+          }
         }
+        url = body.nextLink;
       }
 
       if (next.size > 0) {
@@ -100,38 +115,5 @@ export class OperationsCatalog {
     } finally {
       this.inflight = null;
     }
-  }
-
-  private async listAllProviders(headers: Record<string, string>): Promise<string[]> {
-    const namespaces: string[] = [];
-    let url: string | undefined = `${ARM_BASE}/providers?api-version=${API_VERSION}`;
-    while (url) {
-      const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error(`providers list failed: ${res.status}`);
-      const body = (await res.json()) as ProviderResponse;
-      for (const p of body.value) if (p.namespace) namespaces.push(p.namespace);
-      url = body.nextLink;
-    }
-    return namespaces;
-  }
-
-  private async listOperationsForProvider(
-    providerNamespace: string,
-    headers: Record<string, string>,
-  ): Promise<OperationsResponse["value"]> {
-    const all: OperationsResponse["value"] = [];
-    let url: string | undefined =
-      `${ARM_BASE}/providers/${encodeURIComponent(providerNamespace)}/operations?api-version=${API_VERSION}`;
-    while (url) {
-      const res = await fetch(url, { headers });
-      if (!res.ok) {
-        if (res.status === 404 || res.status === 400) return all;
-        throw new Error(`operations list failed for ${providerNamespace}: ${res.status}`);
-      }
-      const body = (await res.json()) as OperationsResponse;
-      all.push(...body.value);
-      url = body.nextLink;
-    }
-    return all;
   }
 }

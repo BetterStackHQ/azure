@@ -37,7 +37,7 @@
     },
     "functionPackageUri": {
       "type": "string",
-      "defaultValue": "https://github.com/BetterStackHQ/azure/releases/download/function-v1.0.3/function.zip",
+      "defaultValue": "https://github.com/BetterStackHQ/azure/releases/download/function-v1.0.4/function.zip",
       "metadata": {
         "description": "Public URL of the Function deployment zip. A deployment script downloads it and uploads it to the Function App's deployment-storage container."
       }
@@ -195,7 +195,7 @@
           { "name": "STORAGE_ACCOUNT", "value": "[variables('storageAccountName')]" },
           { "name": "CONTAINER", "value": "[variables('deploymentContainerName')]" }
         ],
-        "scriptContent": "set -euo pipefail\ncurl -fsSL \"$PACKAGE_URL\" -o /tmp/function.zip\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n  if az storage blob upload --account-name \"$STORAGE_ACCOUNT\" --container-name \"$CONTAINER\" --name function.zip --file /tmp/function.zip --auth-mode login --overwrite; then\n    exit 0\n  fi\n  echo \"Upload attempt $attempt failed, sleeping 15s for role propagation...\"\n  sleep 15\ndone\necho \"Failed to upload function package after 10 attempts\"\nexit 1"
+        "scriptContent": "set -euo pipefail\npython3 -c 'import os, urllib.request; urllib.request.urlretrieve(os.environ[\"PACKAGE_URL\"], \"/tmp/function.zip\")'\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n  if az storage blob upload --account-name \"$STORAGE_ACCOUNT\" --container-name \"$CONTAINER\" --name function.zip --file /tmp/function.zip --auth-mode login --overwrite; then\n    exit 0\n  fi\n  echo \"Upload attempt $attempt failed, sleeping 15s for role propagation...\"\n  sleep 15\ndone\necho \"Failed to upload function package after 10 attempts\"\nexit 1"
       }
     },
     {
