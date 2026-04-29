@@ -37,7 +37,7 @@
     },
     "functionPackageUri": {
       "type": "string",
-      "defaultValue": "https://github.com/BetterStackHQ/azure/releases/download/function-v1.0.2/function.zip",
+      "defaultValue": "https://github.com/BetterStackHQ/azure/releases/download/function-v1.0.3/function.zip",
       "metadata": {
         "description": "Public URL of the Function deployment zip. Default points at the pinned release."
       }
