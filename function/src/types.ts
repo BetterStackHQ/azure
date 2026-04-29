@@ -27,7 +27,6 @@ export interface OperationDefinition {
 
 export type EnrichmentStatus =
   | "ok"
-  | "pending"
   | "unknown-operation"
   | "no-access"
   | "parse-error";

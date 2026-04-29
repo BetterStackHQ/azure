@@ -28,15 +28,37 @@ const sink = new BetterStackSink({
   },
 });
 
-operationsCatalog.warm().catch((e) => console.warn(`ops catalog warm failed: ${e}`));
-subscriptionDirectory.warm().catch((e) => console.warn(`subscription directory warm failed: ${e}`));
 operationsCatalog.scheduleRefresh();
 subscriptionDirectory.scheduleRefresh();
+
+let warmupPromise: Promise<void> | null = null;
+function ensureWarm(): Promise<void> {
+  if (!warmupPromise) {
+    warmupPromise = (async () => {
+      await Promise.all([operationsCatalog.warm(), subscriptionDirectory.warm()]);
+      if (!operationsCatalog.isReady || !subscriptionDirectory.isReady) {
+        throw new Error(
+          `enrichment caches did not become ready (ops=${operationsCatalog.isReady} subs=${subscriptionDirectory.isReady})`,
+        );
+      }
+    })().catch((err) => {
+      warmupPromise = null;
+      throw err;
+    });
+  }
+  return warmupPromise;
+}
+
+ensureWarm().catch((e) =>
+  console.warn(`initial enrichment cache warm failed, will retry on first invocation: ${(e as Error).message}`),
+);
 
 export async function handleBatch(
   messages: unknown[],
   context: InvocationContext,
 ): Promise<void> {
+  await ensureWarm();
+
   const enriched: EnrichedRecord[] = [];
   let parseErrors = 0;
   let enrichErrors = 0;

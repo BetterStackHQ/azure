@@ -75,14 +75,6 @@ test("ok: operation + subscription both resolve, raw fields forwarded untouched"
   assert.equal((out as { azure?: unknown }).azure, undefined);
 });
 
-test("pending: catalog not yet ready", () => {
-  const ops = fakeCatalog({ ready: false, known: new Map() });
-  const dir = fakeDirectory(false, new Map());
-  const out = new Enricher(ops, dir).enrich(sampleRecord);
-  assert.equal(out._azure_arm.status, "pending");
-  assert.equal(out._azure_arm.operation, null);
-});
-
 test("unknown-operation: catalog ready but this op isn't in it", () => {
   const ops = fakeCatalog({ ready: true, known: new Map() });
   const dir = fakeDirectory(

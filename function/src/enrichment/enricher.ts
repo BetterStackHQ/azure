@@ -21,9 +21,7 @@ export class Enricher {
     const operationDef = this.operations.lookup(operationName);
 
     let status: EnrichmentStatus = "ok";
-    if (!this.operations.isReady || !this.subscriptions.isReady) {
-      status = "pending";
-    } else if (!operationDef && operationName) {
+    if (!operationDef && operationName) {
       status = "unknown-operation";
     }
 
@@ -31,12 +29,7 @@ export class Enricher {
       ? this.subscriptions.lookup(subscriptionId) ?? null
       : null;
 
-    if (
-      status === "ok" &&
-      subscriptionId &&
-      subscriptionName === null &&
-      this.subscriptions.isReady
-    ) {
+    if (status === "ok" && subscriptionId && subscriptionName === null) {
       status = "no-access";
     }
 
