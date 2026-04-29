@@ -142,6 +142,21 @@ az deployment group create \
 
 `region.json` creates only a regional Event Hub and Function. It reuses the role assignments and the activity-log diagnostic setting from your subscription-level deployment, which always stays tied to a single home region.
 
+## Releasing
+
+To release a new version of the Function:
+
+1. Update the version in the `functionPackageUri` default value in `subscription.json`, `resourceGroup.json`, and `region.json` (the URL ends with `function-v<version>/function.zip`).
+2. Commit and push the changes.
+3. Tag the commit with `function-v<version>` and push the tag:
+
+   ```bash
+   git tag function-v<version>
+   git push origin function-v<version>
+   ```
+
+The tag triggers the release workflow, which builds and publishes `function.zip` to the matching GitHub release.
+
 ## License
 
 [MIT](LICENSE)
