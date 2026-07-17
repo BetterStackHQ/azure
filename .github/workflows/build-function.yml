@@ -18,9 +18,9 @@ jobs:
       run:
         working-directory: function
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -40,7 +40,7 @@ jobs:
           zip -r function.zip host.json package.json dist node_modules \
             -x 'node_modules/.cache/*' -x 'node_modules/.bin/*'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: function-zip
           path: function/function.zip
