@@ -1,0 +1,35 @@
+name: AI SRE templates
+
+# Checks templates/ai-sre against its contract (templates/ai-sre/contract.json), lints what a JSON parse doesn't catch,
+# and runs the check's own tests. Standard library Python only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "templates/ai-sre/**"
+      - ".github/workflows/ai-sre-templates.yml"
+  pull_request:
+    paths:
+      - "templates/ai-sre/**"
+      - ".github/workflows/ai-sre-templates.yml"
+
+jobs:
+  contract:
+    name: Template contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/ai-sre/test
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: The templates keep their contract
+        run: python check_contract.py
+
+      - name: Test the contract check
+        run: python -m unittest -v

@@ -146,7 +146,13 @@ az deployment group create \
 
 `templates/region.json` creates only a regional Event Hub and Function. It reuses the role assignments and the activity-log diagnostic setting from your subscription-level deployment, which always stays tied to a single home region.
 
+## AI SRE
+
+`templates/ai-sre/` holds the templates for Better Stack AI SRE, which reads logs, metrics and changes to investigate incidents. They are separate from the templates above and share nothing with them. See [templates/ai-sre/README.md](templates/ai-sre/README.md).
+
 ## Releasing
+
+### Function
 
 To release a new version of the Function:
 
@@ -160,6 +166,31 @@ To release a new version of the Function:
    ```
 
 The tag triggers the release workflow, which builds and publishes `function.zip` to the matching GitHub release.
+
+### AI SRE templates
+
+The AI SRE templates are released with `ai-sre-v<semver>` tags, apart from the Function's `function-v*` tags. Better Stack serves the templates from the commit a release points to, so a merge to `main` changes nothing for customers until a release.
+
+1. Merge the change to `main` with the **AI SRE templates** check green: it fails when a release would break the template contract (see [templates/ai-sre/README.md](templates/ai-sre/README.md#template-contract)).
+2. Pick the version. A fix that keeps the contract is a patch, a new parameter (always with a default) or a new resource is a minor version. A change to `contract.json` is a major version, and needs Better Stack's own code to change with it.
+3. Tag the commit and push the tag:
+
+   ```bash
+   git tag ai-sre-v<version> <commit>
+   git push origin ai-sre-v<version>
+   ```
+
+4. Check that both templates answer at that commit:
+
+   ```bash
+   for t in subscription grant; do
+     curl -fsS -o /dev/null -w "%{http_code} $t\n" "https://raw.githubusercontent.com/BetterStackHQ/azure/<commit>/templates/ai-sre/$t.json"
+   done
+   ```
+
+5. Point Better Stack at the release by the commit's full SHA, not by the tag: a tag can be moved, a commit can't.
+
+Never move or delete an `ai-sre-v*` tag once it is pushed.
 
 ## License
 

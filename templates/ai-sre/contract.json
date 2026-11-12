@@ -1,0 +1,43 @@
+{
+  "about": "The fields of the AI SRE templates that no release may break; test/check_contract.py checks both templates against them. Better Stack patches parameter defaults by name, reads clientId from the customer's paste, and tells customers to deploy again over what they have. Change this file only to change the contract, on purpose: parameters are only ever added, always with a default, and the binding parameters never get one.",
+  "role_definition_id": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
+  "templates": {
+    "subscription.json": {
+      "schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+      "parameters": {
+        "identityName": { "type": "string" },
+        "resourceGroupName": { "type": "string" },
+        "issuer": { "type": "string" },
+        "subject": { "type": "string" },
+        "audience": { "type": "string" },
+        "location": { "type": "string", "defaultValue": "[deployment().location]" }
+      },
+      "binding_parameters": ["identityName", "resourceGroupName", "issuer", "subject", "audience"],
+      "outputs": ["clientId"],
+      "names": {
+        "Microsoft.Resources/resourceGroups": "[parameters('resourceGroupName')]",
+        "Microsoft.ManagedIdentity/userAssignedIdentities": "[parameters('identityName')]",
+        "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials": "[concat(parameters('identityName'), '/', parameters('identityName'))]",
+        "Microsoft.Authorization/roleAssignments": "[guid(subscription().subscriptionId, parameters('principalId'), variables('monitoringReaderRoleId'))]"
+      },
+      "federated_credential": {
+        "issuer": "issuer",
+        "subject": "subject",
+        "audiences": ["audience"]
+      },
+      "client_id_from": "outputs.clientId.value",
+      "principal_id_from": "outputs.principalId.value"
+    },
+    "grant.json": {
+      "schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+      "parameters": {
+        "principalId": { "type": "string" }
+      },
+      "binding_parameters": ["principalId"],
+      "outputs": [],
+      "names": {
+        "Microsoft.Authorization/roleAssignments": "[guid(subscription().subscriptionId, parameters('principalId'), variables('monitoringReaderRoleId'))]"
+      }
+    }
+  }
+}

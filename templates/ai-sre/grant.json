@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Better Stack AI SRE: gives an existing Better Stack AI SRE managed identity Monitoring Reader on this subscription. Better Stack fills in the identity."
+  },
+  "parameters": {
+    "principalId": {
+      "type": "string",
+      "metadata": {
+        "description": "Object (principal) ID of the Better Stack AI SRE managed identity, set by Better Stack."
+      }
+    }
+  },
+  "variables": {
+    "monitoringReaderRoleId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().subscriptionId, parameters('principalId'), variables('monitoringReaderRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringReaderRoleId'))]",
+        "principalId": "[parameters('principalId')]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ]
+}

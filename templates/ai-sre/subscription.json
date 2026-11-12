@@ -1,0 +1,184 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Better Stack AI SRE: a resource group with a user-assigned managed identity that trusts only Better Stack's issuer for one integration, and Monitoring Reader on this subscription for that identity. No secret is created. Better Stack fills in every parameter except the region."
+  },
+  "parameters": {
+    "identityName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "metadata": {
+        "description": "Name of the managed identity and its federated credential, set by Better Stack (betterstack-ai-sre-<8 hex>)."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 90,
+      "metadata": {
+        "description": "Resource group created for the managed identity, set by Better Stack (betterstack-ai-sre-<8 hex>)."
+      }
+    },
+    "issuer": {
+      "type": "string",
+      "metadata": {
+        "description": "Better Stack's token issuer, set by Better Stack."
+      }
+    },
+    "subject": {
+      "type": "string",
+      "metadata": {
+        "description": "The subject Better Stack uses for this integration, set by Better Stack (ai-sre-azure:<integration ID>)."
+      }
+    },
+    "audience": {
+      "type": "string",
+      "metadata": {
+        "description": "The audience of Better Stack's tokens, set by Better Stack (api://AzureADTokenExchange)."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[deployment().location]",
+      "metadata": {
+        "description": "Region of the resource group and the managed identity. Defaults to the region chosen for the deployment. Malaysia South doesn't support federated credentials on managed identities."
+      }
+    }
+  },
+  "variables": {
+    "tags": {
+      "managed-by": "betterstack-ai-sre"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('identityName')]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "identityName": { "value": "[parameters('identityName')]" },
+          "issuer": { "value": "[parameters('issuer')]" },
+          "subject": { "value": "[parameters('subject')]" },
+          "audience": { "value": "[parameters('audience')]" },
+          "location": { "value": "[parameters('location')]" },
+          "tags": { "value": "[variables('tags')]" }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "identityName": { "type": "string" },
+            "issuer": { "type": "string" },
+            "subject": { "type": "string" },
+            "audience": { "type": "string" },
+            "location": { "type": "string" },
+            "tags": { "type": "object" }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('identityName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials",
+              "apiVersion": "2023-01-31",
+              "name": "[concat(parameters('identityName'), '/', parameters('identityName'))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]"
+              ],
+              "properties": {
+                "issuer": "[parameters('issuer')]",
+                "subject": "[parameters('subject')]",
+                "audiences": [
+                  "[parameters('audience')]"
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]"
+            },
+            "clientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').clientId]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2024-03-01",
+      "name": "[concat(parameters('identityName'), '-role')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId(subscription().subscriptionId, parameters('resourceGroupName'), 'Microsoft.Resources/deployments', parameters('identityName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "principalId": {
+            "value": "[reference(resourceId(subscription().subscriptionId, parameters('resourceGroupName'), 'Microsoft.Resources/deployments', parameters('identityName')), '2024-03-01').outputs.principalId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "principalId": { "type": "string" }
+          },
+          "variables": {
+            "monitoringReaderRoleId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(subscription().subscriptionId, parameters('principalId'), variables('monitoringReaderRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringReaderRoleId'))]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "clientId": {
+      "type": "string",
+      "value": "[reference(resourceId(subscription().subscriptionId, parameters('resourceGroupName'), 'Microsoft.Resources/deployments', parameters('identityName')), '2024-03-01').outputs.clientId.value]",
+      "metadata": {
+        "description": "Paste this into the Azure integration in Better Stack."
+      }
+    }
+  }
+}
