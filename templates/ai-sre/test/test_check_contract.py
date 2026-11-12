@@ -264,6 +264,134 @@ class ContractTest(unittest.TestCase):
             ),
         )
 
+    # Closed world: a release adds no resource, no second trust and no wider grant the contract doesn't record.
+
+    def test_a_second_federated_credential_as_a_child_resource_fails(self):
+        child = (
+            '"tags": "[parameters(\'tags\')]",\n              "resources": [{"type": "federatedIdentityCredentials", '
+            '"apiVersion": "2023-01-31", "name": "second", "dependsOn": ["[parameters(\'identityName\')]"], '
+            '"properties": {"issuer": "https://issuer.example.net", "subject": "anyone", '
+            '"audiences": ["api://AzureADTokenExchange"]}}]'
+        )
+        self.assertFails(
+            "subscription.json: 2 resources of type Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials, "
+            "the contract records 1",
+            subscription=replace(SUBSCRIPTION, "\"tags\": \"[parameters('tags')]\"", child),
+        )
+
+    def test_a_linked_template_deployment_fails(self):
+        linked = (
+            '"tags": "[variables(\'tags\')]"\n    },\n    {"type": "Microsoft.Resources/deployments", "apiVersion": "2024-03-01", '
+            '"name": "extra", "location": "[parameters(\'location\')]", '
+            '"properties": {"mode": "Incremental", "templateLink": {"uri": "https://example.com/template.json"}}},'
+        )
+        self.assertFails(
+            "subscription.json: the deployment extra uses templateLink",
+            subscription=replace(SUBSCRIPTION, "\"tags\": \"[variables('tags')]\"\n    },", linked),
+        )
+
+    def test_a_resource_of_an_unrecorded_type_fails(self):
+        lock = (
+            '"tags": "[variables(\'tags\')]"\n    },\n    {"type": "Microsoft.Authorization/locks", "apiVersion": "2020-05-01", '
+            '"name": "lock", "properties": {"level": "CanNotDelete"}},'
+        )
+        self.assertFails(
+            "subscription.json: resource type Microsoft.Authorization/locks is not recorded in contract.json",
+            subscription=replace(SUBSCRIPTION, "\"tags\": \"[variables('tags')]\"\n    },", lock),
+        )
+
+    def test_a_condition_on_the_role_assignment_fails(self):
+        self.assertFails(
+            "subscription.json: Microsoft.Authorization/roleAssignments has a condition",
+            subscription=replace(
+                SUBSCRIPTION,
+                '"type": "Microsoft.Authorization/roleAssignments",',
+                '"type": "Microsoft.Authorization/roleAssignments",\n              "condition": false,',
+            ),
+        )
+
+    def test_a_condition_on_the_federated_credential_fails(self):
+        self.assertFails(
+            "subscription.json: Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials has a condition",
+            subscription=replace(
+                SUBSCRIPTION,
+                '"type": "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials",',
+                '"type": "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials",\n              "condition": false,',
+            ),
+        )
+
+    def test_a_condition_on_the_grant_role_assignment_fails(self):
+        self.assertFails(
+            "grant.json: Microsoft.Authorization/roleAssignments has a condition",
+            grant=replace(
+                GRANT,
+                '"type": "Microsoft.Authorization/roleAssignments",',
+                '"type": "Microsoft.Authorization/roleAssignments",\n      "condition": "[equals(1, 2)]",',
+            ),
+        )
+
+    def test_a_copy_loop_fails(self):
+        self.assertFails(
+            "grant.json: Microsoft.Authorization/roleAssignments has a copy loop",
+            grant=replace(
+                GRANT,
+                '"type": "Microsoft.Authorization/roleAssignments",',
+                '"type": "Microsoft.Authorization/roleAssignments",\n      "copy": {"name": "grants", "count": 2},',
+            ),
+        )
+
+    def test_a_complete_mode_deployment_fails(self):
+        self.assertFails(
+            "subscription.json: the deployment [parameters('identityName')] runs in mode Complete",
+            subscription=replace(
+                SUBSCRIPTION,
+                '"mode": "Incremental",\n        "expressionEvaluationOptions": {\n          "scope": "inner"\n        },\n        "parameters": {\n          "identityName"',
+                '"mode": "Complete",\n        "expressionEvaluationOptions": {\n          "scope": "inner"\n        },\n        "parameters": {\n          "identityName"',
+            ),
+        )
+
+    # Where the resource group and the identity land: a redeploy must find them where the first deployment put them.
+
+    def test_a_resource_group_location_not_from_its_parameter_fails(self):
+        self.assertFails(
+            "subscription.json: Microsoft.Resources/resourceGroups's location doesn't come from the location parameter",
+            subscription=replace(
+                SUBSCRIPTION,
+                "\"location\": \"[parameters('location')]\",\n      \"tags\": \"[variables('tags')]\"",
+                "\"location\": \"[deployment().location]\",\n      \"tags\": \"[variables('tags')]\"",
+            ),
+        )
+
+    def test_an_identity_location_not_from_its_parameter_fails(self):
+        self.assertFails(
+            "subscription.json: Microsoft.ManagedIdentity/userAssignedIdentities's location doesn't come from the location parameter",
+            subscription=replace(
+                SUBSCRIPTION,
+                "\"location\": \"[parameters('location')]\",\n              \"tags\": \"[parameters('tags')]\"",
+                "\"location\": \"westeurope\",\n              \"tags\": \"[parameters('tags')]\"",
+            ),
+        )
+
+    def test_an_identity_in_another_resource_group_fails(self):
+        self.assertFails(
+            "subscription.json: Microsoft.ManagedIdentity/userAssignedIdentities isn't deployed into the resourceGroupName resource group",
+            subscription=replace(
+                SUBSCRIPTION,
+                "\"resourceGroup\": \"[parameters('resourceGroupName')]\"",
+                "\"resourceGroup\": \"[parameters('identityName')]\"",
+            ),
+        )
+
+    def test_an_identity_in_another_subscription_fails(self):
+        self.assertFails(
+            "subscription.json: Microsoft.ManagedIdentity/userAssignedIdentities is deployed with a subscriptionId",
+            subscription=replace(
+                SUBSCRIPTION,
+                "\"resourceGroup\": \"[parameters('resourceGroupName')]\"",
+                "\"resourceGroup\": \"[parameters('resourceGroupName')]\",\n      \"subscriptionId\": \"00000000-0000-0000-0000-000000000000\"",
+            ),
+        )
+
     # The lint: what a JSON parse doesn't catch and Azure refuses at deployment time.
 
     def test_a_resource_group_resource_id_without_the_subscription_fails(self):

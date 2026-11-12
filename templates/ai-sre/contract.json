@@ -13,6 +13,17 @@
         "location": { "type": "string", "defaultValue": "[deployment().location]" }
       },
       "binding_parameters": ["identityName", "resourceGroupName", "issuer", "subject", "audience"],
+      "resources": {
+        "Microsoft.Resources/resourceGroups": 1,
+        "Microsoft.Resources/deployments": 2,
+        "Microsoft.ManagedIdentity/userAssignedIdentities": 1,
+        "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials": 1,
+        "Microsoft.Authorization/roleAssignments": 1
+      },
+      "placement": {
+        "Microsoft.Resources/resourceGroups": { "location": "location" },
+        "Microsoft.ManagedIdentity/userAssignedIdentities": { "location": "location", "resourceGroup": "resourceGroupName" }
+      },
       "outputs": ["clientId"],
       "names": {
         "Microsoft.Resources/resourceGroups": "[parameters('resourceGroupName')]",
@@ -34,6 +45,9 @@
         "principalId": { "type": "string" }
       },
       "binding_parameters": ["principalId"],
+      "resources": {
+        "Microsoft.Authorization/roleAssignments": 1
+      },
       "outputs": [],
       "names": {
         "Microsoft.Authorization/roleAssignments": "[guid(subscription().subscriptionId, parameters('principalId'), variables('monitoringReaderRoleId'))]"

@@ -5,7 +5,9 @@ Fails when a parameter is removed or renamed, a recorded parameter's type or def
 default, a new parameter has no default or isn't recorded yet, the clientId output goes, the scope changes, the name of
 the resource group, the identity, its federated credential or the role assignment changes, the role assignment is named
 differently in the two templates, the federated credential stops taking its issuer, subject and audience from their
-parameters, the role assignment stops naming the identity's principal or grants another role. A change to any of these
+parameters, the role assignment stops naming the identity's principal or grants another role, the resource group or
+the identity moves away from the location and resourceGroupName parameters, or a resource is added, removed, made
+conditional, looped, linked from another template or deployed in a mode other than Incremental. A change to any of these
 is a change of contract: make it on purpose, in contract.json, in the same pull request.
 
 It also lints what a JSON parse doesn't catch and Azure only refuses at deployment time: an expression whose
@@ -61,11 +63,28 @@ def scopes(template, chain=()):
             yield from scopes(nested, list(chain) + [resource])
 
 
+def full_type(child_type, parent_type):
+    """A child resource's type as ARM resolves it: a short type is appended to its parent's."""
+    if parent_type is None or child_type.lower().startswith(parent_type.split("/")[0].lower() + "/"):
+        return child_type
+    return f"{parent_type}/{child_type}"
+
+
+def with_children(resource_list, parent_type=None):
+    """(resource, full type) for each resource in RESOURCE_LIST and, recursively, its child resources."""
+    for resource in resource_list if isinstance(resource_list, list) else []:
+        if not isinstance(resource, dict):
+            continue
+        resource_type = full_type(str(resource.get("type", "")), parent_type)
+        yield resource, resource_type
+        yield from with_children(resource.get("resources", []), resource_type)
+
+
 def resources(template):
-    """(resource, scope) for every resource, nested deployments' resources included."""
+    """(resource, scope, full type) for every resource: child resources and nested deployments' resources included."""
     for scope in scopes(template):
-        for resource in scope.template.get("resources", []):
-            yield resource, scope
+        for resource, resource_type in with_children(scope.template.get("resources", [])):
+            yield resource, scope, resource_type
 
 
 def strings(value):
@@ -222,7 +241,58 @@ def check_wiring(template):
 
 
 def find(template, resource_type):
-    return [(r, s) for r, s in resources(template) if r.get("type", "").lower() == resource_type.lower()]
+    return [(r, s) for r, s, t in resources(template) if t.lower() == resource_type.lower()]
+
+
+def check_inventory(template, contract):
+    """Closed world: exactly the recorded resources, each deployed unconditionally, once, from an inline template."""
+    errors = []
+    counts = {}
+    for resource, scope, resource_type in resources(template):
+        counts[resource_type] = counts.get(resource_type, 0) + 1
+        if "condition" in resource:
+            errors.append(f"{resource_type} has a condition: a release must not drop it for some deployments")
+        if "copy" in resource or "copy" in (resource.get("properties") or {}):
+            errors.append(f"{resource_type} has a copy loop: the contract records how many of each resource there are")
+        if resource_type == DEPLOYMENTS:
+            props = resource.get("properties") or {}
+            name = resource.get("name")
+            if "templateLink" in props or "template" not in props:
+                errors.append(f"the deployment {name} uses templateLink: the check can only read an inline template")
+            if props.get("mode") != "Incremental":
+                errors.append(
+                    f"the deployment {name} runs in mode {props.get('mode')}, not Incremental: "
+                    "Complete mode deletes what it doesn't list"
+                )
+    recorded = {t.lower(): (t, n) for t, n in contract["resources"].items()}
+    found = {t.lower(): (t, n) for t, n in counts.items()}
+    for key, (resource_type, count) in found.items():
+        if key not in recorded:
+            errors.append(f"resource type {resource_type} is not recorded in contract.json: a release adds nothing unrecorded")
+    for key, (resource_type, count) in recorded.items():
+        actual = found.get(key, (resource_type, 0))[1]
+        if actual != count:
+            errors.append(f"{actual} resources of type {resource_type}, the contract records {count}")
+    return errors
+
+
+def check_placement(template, contract):
+    """The resource group and the identity land where the parameters say, so a redeploy finds them again."""
+    errors = []
+    for resource_type, expected in contract.get("placement", {}).items():
+        found = find(template, resource_type)
+        if len(found) != 1:
+            continue
+        (resource, scope), = found
+        if "location" in expected and trace(resource.get("location"), scope.chain) != expected["location"]:
+            errors.append(f"{resource_type}'s location doesn't come from the {expected['location']} parameter")
+        if "resourceGroup" in expected:
+            holder = scope.chain[-1] if scope.chain else {}
+            if trace(holder.get("resourceGroup"), scope.chain[:-1]) != expected["resourceGroup"]:
+                errors.append(f"{resource_type} isn't deployed into the {expected['resourceGroup']} resource group")
+            if any("subscriptionId" in deployment for deployment in scope.chain):
+                errors.append(f"{resource_type} is deployed with a subscriptionId: it belongs in the subscription deployed to")
+    return errors
 
 
 def check_names(template, contract):
@@ -230,7 +300,6 @@ def check_names(template, contract):
     for resource_type, expected in contract["names"].items():
         found = find(template, resource_type)
         if len(found) != 1:
-            errors.append(f"{len(found)} resources of type {resource_type}, the contract records 1")
             continue
         name = found[0][0].get("name")
         if name != expected:
@@ -350,7 +419,9 @@ def check_template(template, contract):
         errors
         + check_parameters(template, contract)
         + check_outputs(template, contract)
+        + check_inventory(template, contract)
         + check_names(template, contract)
+        + check_placement(template, contract)
         + check_wiring(template)
         + check_federated_credential(template, contract)
         + check_role(template, contract)

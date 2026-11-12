@@ -92,7 +92,9 @@ Better Stack fills in parameters by name, reads `clientId` from your paste, and 
 - the output `clientId`;
 - the names of the resource group, the identity and the federated credential, whose name can't change once created;
 - the role assignment's name, which includes the identity's principal ID and is the same in both templates;
-- the role, Monitoring Reader: a redeploy can't take back a role already assigned.
+- the role, Monitoring Reader: a redeploy can't take back a role already assigned;
+- the resource group and the identity in the region of the `location` parameter, and the identity in the `resourceGroupName` group;
+- exactly the resources listed above, each deployed unconditionally, once, from an inline template, in Incremental mode: a release adds no resource the contract doesn't record.
 
 [`contract.json`](contract.json) records these fields. CI checks both templates against it with [`test/check_contract.py`](test/check_contract.py), which also catches mistakes a JSON parse doesn't (an undeclared parameter, unbalanced parentheses, `resourceId()` at subscription scope without the subscription ID first), and runs the check's own tests. Python 3, standard library only:
 
